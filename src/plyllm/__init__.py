@@ -16,7 +16,6 @@ from omniplay.llm.response import (
     OutputText,
     ReasoningTrace,
 )
-from omniplay.llm.router import LLM
 from omniplay.llm.tokens import LLMTokens
 
 __all__ = [
@@ -39,8 +38,6 @@ __all__ = [
     "EmbeddingResponse",
     "LLMTokens",
 ]
-<<<<<<< HEAD
-=======
 
 
 # The LLM router pulls the provider SDKs (openai / google-genai), so expose it lazily: importing the
@@ -52,4 +49,3 @@ def __getattr__(name: str) -> object:
 
         return LLM
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
->>>>>>> fb9b8ae (rebase with the previous LLM)
