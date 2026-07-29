@@ -1,5 +1,6 @@
 from omniplay.llm.llm_config import (
     GeminiProviderConfig,
+    HuggingFaceProviderConfig,
     LLMConfig,
     MetacentrumProviderConfig,
     OpenAIProviderConfig,
@@ -24,6 +25,7 @@ __all__ = [
     "OpenAIProviderConfig",
     "GeminiProviderConfig",
     "MetacentrumProviderConfig",
+    "HuggingFaceProviderConfig",
     "LLMMessage",
     "MessageRole",
     "LLMModel",
