@@ -25,14 +25,25 @@ class MetacentrumProviderConfig:
 
 
 @dataclass(frozen=True)
+class HuggingFaceProviderConfig:
+    # supported model aliases (see huggingface_models()) to download/verify for this environment
+    models: tuple[str, ...]
+    # HF_TOKEN, only needed for gated/private models
+    token: str | None = None
+    # explicit device override (e.g. "cuda", "cpu"); auto-detected when None
+    device: str | None = None
+
+
+@dataclass(frozen=True)
 class LLMConfig:
     openai: OpenAIProviderConfig | None = None
     gemini: GeminiProviderConfig | None = None
     metacentrum: MetacentrumProviderConfig | None = None
+    huggingface: HuggingFaceProviderConfig | None = None
     default_concurrency: int = 10
 
     @classmethod
-    def from_env(cls, default_concurrency: int = 10) -> LLMConfig:
+    def from_env(cls, default_concurrency: int = 10, huggingface_models: list[str] | None = None) -> LLMConfig:
         # merge process env with a local .env file (env takes precedence)
         values: dict[str, str | None] = {**dotenv_values(), **os.environ}
 
@@ -58,9 +69,14 @@ class LLMConfig:
         if meta_key is not None and meta_url is not None:
             metacentrum = MetacentrumProviderConfig(api_key=meta_key, base_url=meta_url)
 
+        huggingface = None
+        if huggingface_models:
+            huggingface = HuggingFaceProviderConfig(models=tuple(huggingface_models), token=get("HF_TOKEN"))
+
         return cls(
             openai=openai,
             gemini=gemini,
             metacentrum=metacentrum,
+            huggingface=huggingface,
             default_concurrency=default_concurrency,
         )

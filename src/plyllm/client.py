@@ -26,6 +26,11 @@ class LLMClient(ABC):
     def build(cls, config: LLMConfig) -> LLMClient | None:
         raise NotImplementedError
 
+    def bootstrap(self) -> None:
+        # optional hook: providers that need to download/verify resources (e.g. local models)
+        # override this; remote providers keep the no-op default
+        return None
+
     def resolve_model(self, model_name: str) -> LLMModel:
         model = self._models.get(model_name, None)
         if model is None:
