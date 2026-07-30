@@ -5,15 +5,15 @@ from typing import Any
 from openai import APIConnectionError, APIError, APITimeoutError, AsyncOpenAI, RateLimitError
 from pydantic import BaseModel
 
-from omniplay.llm.client import LLMClient
-from omniplay.llm.concurrency import safe_call
-from omniplay.llm.llm_config import LLMConfig
-from omniplay.llm.message import LLMMessage
-from omniplay.llm.options import LLMCallOptions
-from omniplay.llm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
-from omniplay.llm.providers.openai.client import build_response, responses_tokens
-from omniplay.llm.providers.providers import Provider
-from omniplay.llm.response import EmbeddingResponse, LLMResponse
+from plybench.llm.client import LLMClient
+from plybench.llm.concurrency import safe_call
+from plybench.llm.llm_config import LLMConfig
+from plybench.llm.message import LLMMessage
+from plybench.llm.options import LLMCallOptions
+from plybench.llm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
+from plybench.llm.providers.openai.client import build_response, responses_tokens
+from plybench.llm.providers.providers import Provider
+from plybench.llm.response import EmbeddingResponse, LLMResponse
 
 _RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
 

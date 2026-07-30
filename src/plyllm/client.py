@@ -4,14 +4,14 @@ from abc import ABC, abstractmethod
 
 from pydantic import BaseModel
 
-from omniplay.llm.concurrency import ProviderSemaphore
-from omniplay.llm.llm_config import LLMConfig
-from omniplay.llm.message import LLMMessage
-from omniplay.llm.model import LLMModel
-from omniplay.llm.options import LLMCallOptions
-from omniplay.llm.providers.providers import Provider
-from omniplay.llm.response import EmbeddingResponse, LLMResponse
-from omniplay.llm.tokens import LLMTokens
+from plybench.llm.concurrency import ProviderSemaphore
+from plybench.llm.llm_config import LLMConfig
+from plybench.llm.message import LLMMessage
+from plybench.llm.model import LLMModel
+from plybench.llm.options import LLMCallOptions
+from plybench.llm.providers.providers import Provider
+from plybench.llm.response import EmbeddingResponse, LLMResponse
+from plybench.llm.tokens import LLMTokens
 
 
 class LLMClient(ABC):

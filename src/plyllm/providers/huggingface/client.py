@@ -6,20 +6,20 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from omniplay.llm.client import LLMClient
-from omniplay.llm.llm_config import HuggingFaceProviderConfig, LLMConfig
-from omniplay.llm.message import LLMMessage
-from omniplay.llm.options import LLMCallOptions
-from omniplay.llm.providers.huggingface.models import huggingface_models
-from omniplay.llm.providers.providers import Provider
-from omniplay.llm.response import EmbeddingResponse, LLMResponse
-from omniplay.llm.tokens import EmbeddingTokens
+from plybench.llm.client import LLMClient
+from plybench.llm.llm_config import HuggingFaceProviderConfig, LLMConfig
+from plybench.llm.message import LLMMessage
+from plybench.llm.options import LLMCallOptions
+from plybench.llm.providers.huggingface.models import huggingface_models
+from plybench.llm.providers.providers import Provider
+from plybench.llm.response import EmbeddingResponse, LLMResponse
+from plybench.llm.tokens import EmbeddingTokens
 
 if TYPE_CHECKING:
     import torch
     from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-_MISSING_EXTRA = "HuggingFace provider requires the 'huggingface' extra. Install it with: pip install omniplay[huggingface]"
+_MISSING_EXTRA = "HuggingFace provider requires the 'huggingface' extra. Install it with: pip install plybench[huggingface]"
 
 
 def _import_torch() -> tuple[ModuleType, ModuleType]:
@@ -117,7 +117,7 @@ class HuggingFaceLLMClient(LLMClient):
         model = self.resolve_model(model_name)  # reject models outside the supported registry
         if model_name not in self._verified:
             raise ValueError(
-                f"HuggingFace model '{model_name}' has not been verified. Add it to hf_models=[...] in your OmniPlay(...) bootstrap so it is downloaded and verified before use."
+                f"HuggingFace model '{model_name}' has not been verified. Add it to hf_models=[...] in your PlyBench(...) bootstrap so it is downloaded and verified before use."
             )
         if not texts:
             return EmbeddingResponse(self.provider_key, model.model_string, [], EmbeddingTokens(0))

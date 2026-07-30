@@ -4,21 +4,21 @@ import importlib
 
 from pydantic import BaseModel
 
-from omniplay.llm.client import LLMClient
-from omniplay.llm.llm_config import LLMConfig
-from omniplay.llm.message import LLMMessage
-from omniplay.llm.model import LLMModel
-from omniplay.llm.model_config import ModelConfig
-from omniplay.llm.providers.providers import Provider
-from omniplay.llm.response import EmbeddingResponse, LLMResponse
-from omniplay.llm.tokens import LLMTokens
+from plybench.llm.client import LLMClient
+from plybench.llm.llm_config import LLMConfig
+from plybench.llm.message import LLMMessage
+from plybench.llm.model import LLMModel
+from plybench.llm.model_config import ModelConfig
+from plybench.llm.providers.providers import Provider
+from plybench.llm.response import EmbeddingResponse, LLMResponse
+from plybench.llm.tokens import LLMTokens
 
 # each provider SDK is an optional extra; wire up only the ones whose dependencies are installed
 _CLIENT_MODULES = (
-    ("omniplay.llm.providers.openai.client", "OpenAILLMClient"),
-    ("omniplay.llm.providers.gemini.client", "GeminiLLMClient"),
-    ("omniplay.llm.providers.metacentrum.client", "MetacentrumLLMClient"),
-    ("omniplay.llm.providers.huggingface.client", "HuggingFaceLLMClient"),
+    ("plybench.llm.providers.openai.client", "OpenAILLMClient"),
+    ("plybench.llm.providers.gemini.client", "GeminiLLMClient"),
+    ("plybench.llm.providers.metacentrum.client", "MetacentrumLLMClient"),
+    ("plybench.llm.providers.huggingface.client", "HuggingFaceLLMClient"),
 )
 
 

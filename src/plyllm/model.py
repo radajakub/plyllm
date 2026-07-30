@@ -3,9 +3,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from omniplay.llm.options import LLMCallOptions, ReasoningEffort
-from omniplay.llm.tokens import LLMTokens
-from omniplay.utils.const import MILLION
+from plybench.llm.options import LLMCallOptions, ReasoningEffort
+from plybench.llm.tokens import LLMTokens
+from plybench.utils.const import MILLION
 
 
 class LLMModel(ABC):

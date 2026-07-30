@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from google.genai.types import GenerateContentConfig, ThinkingConfig
 
-from omniplay.llm.model import LLMModel
-from omniplay.llm.options import LLMCallOptions, ReasoningEffort
+from plybench.llm.model import LLMModel
+from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
 # Gemini 2.5 models (thinking_budget) and some Gemini 3 Pro variants
 _GEMINI_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})

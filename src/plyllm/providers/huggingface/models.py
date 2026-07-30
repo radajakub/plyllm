@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from omniplay.llm.model import LLMModel
-from omniplay.llm.options import LLMCallOptions
+from plybench.llm.model import LLMModel
+from plybench.llm.options import LLMCallOptions
 
 
 class HuggingFaceLLMModel(LLMModel):

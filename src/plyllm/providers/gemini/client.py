@@ -5,15 +5,15 @@ from google.genai.errors import APIError
 from google.genai.types import Content, GenerateContentResponse, Part
 from pydantic import BaseModel
 
-from omniplay.llm.client import LLMClient
-from omniplay.llm.concurrency import safe_call
-from omniplay.llm.llm_config import LLMConfig
-from omniplay.llm.message import LLMMessage
-from omniplay.llm.options import LLMCallOptions
-from omniplay.llm.providers.gemini.models import GeminiLLMModel, gemini_models
-from omniplay.llm.providers.providers import Provider
-from omniplay.llm.response import EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
-from omniplay.llm.tokens import LLMTokens
+from plybench.llm.client import LLMClient
+from plybench.llm.concurrency import safe_call
+from plybench.llm.llm_config import LLMConfig
+from plybench.llm.message import LLMMessage
+from plybench.llm.options import LLMCallOptions
+from plybench.llm.providers.gemini.models import GeminiLLMModel, gemini_models
+from plybench.llm.providers.providers import Provider
+from plybench.llm.response import EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.tokens import LLMTokens
 
 _RETRY_ERRORS = (APIError,)
 _ROLE_MAP = {"user": "user", "assistant": "model", "system": "user"}

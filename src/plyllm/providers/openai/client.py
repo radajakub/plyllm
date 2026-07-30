@@ -5,15 +5,15 @@ from typing import Any
 from openai import APIConnectionError, APIError, APITimeoutError, AsyncOpenAI, RateLimitError
 from pydantic import BaseModel
 
-from omniplay.llm.client import LLMClient
-from omniplay.llm.concurrency import safe_call
-from omniplay.llm.llm_config import LLMConfig
-from omniplay.llm.message import LLMMessage
-from omniplay.llm.options import LLMCallOptions
-from omniplay.llm.providers.openai.models import openai_models
-from omniplay.llm.providers.providers import Provider
-from omniplay.llm.response import EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
-from omniplay.llm.tokens import EmbeddingTokens, LLMTokens
+from plybench.llm.client import LLMClient
+from plybench.llm.concurrency import safe_call
+from plybench.llm.llm_config import LLMConfig
+from plybench.llm.message import LLMMessage
+from plybench.llm.options import LLMCallOptions
+from plybench.llm.providers.openai.models import openai_models
+from plybench.llm.providers.providers import Provider
+from plybench.llm.response import EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
 _RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
 
@@ -88,7 +88,7 @@ class OpenAILLMClient(LLMClient):
             instructions=system.content,
             input=[message.to_dict() for message in messages],
             store=False,
-            prompt_cache_key="OmniPlay",
+            prompt_cache_key="PlyBench",
             **params,
         )
         if output_schema is not None:
