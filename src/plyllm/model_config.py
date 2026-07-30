@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
-from omniplay.llm.options import LLMCallOptions
-from omniplay.llm.providers.providers import Provider
+from plybench.llm.options import LLMCallOptions
+from plybench.llm.providers.providers import Provider
 
 
 @dataclass(frozen=True)

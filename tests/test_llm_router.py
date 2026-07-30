@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from omniplay.llm import (
+from plybench.llm import (
     LLM,
     LLMCallOptions,
     LLMConfig,
@@ -13,10 +13,10 @@ from omniplay.llm import (
     OpenAIProviderConfig,
     Provider,
 )
-from omniplay.llm.client import LLMClient
-from omniplay.llm.model import LLMModel
-from omniplay.llm.response import EmbeddingResponse, OutputText
-from omniplay.llm.tokens import EmbeddingTokens
+from plybench.llm.client import LLMClient
+from plybench.llm.model import LLMModel
+from plybench.llm.response import EmbeddingResponse, OutputText
+from plybench.llm.tokens import EmbeddingTokens
 
 
 class _StubModel(LLMModel):

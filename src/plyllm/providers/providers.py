@@ -1,4 +1,4 @@
-from omniplay.utils.enums import ExtendedEnum
+from plybench.utils.enums import ExtendedEnum
 
 
 class Provider(str, ExtendedEnum):

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from omniplay.llm.model import LLMModel
-from omniplay.llm.options import LLMCallOptions, ReasoningEffort
+from plybench.llm.model import LLMModel
+from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
 # GPT-5.4 / 5.5 / 5.6 standard models (docs also list none; 5.6 also lists max)
 _GPT5_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh"})

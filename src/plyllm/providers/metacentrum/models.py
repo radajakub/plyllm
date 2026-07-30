@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from omniplay.llm.model import LLMModel
-from omniplay.llm.options import LLMCallOptions, ReasoningEffort
+from plybench.llm.model import LLMModel
+from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
 _DEFAULT_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})
 

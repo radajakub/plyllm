@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from omniplay.llm import LLM, HuggingFaceProviderConfig, LLMConfig, Provider
-from omniplay.llm.providers.huggingface.client import HuggingFaceLLMClient
+from plybench.llm import LLM, HuggingFaceProviderConfig, LLMConfig, Provider
+from plybench.llm.providers.huggingface.client import HuggingFaceLLMClient
 
 
 def test_from_env_builds_hf_config_only_when_models_given(monkeypatch):

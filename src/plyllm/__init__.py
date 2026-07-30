@@ -1,23 +1,23 @@
-from omniplay.llm.llm_config import (
+from plybench.llm.llm_config import (
     GeminiProviderConfig,
     HuggingFaceProviderConfig,
     LLMConfig,
     MetacentrumProviderConfig,
     OpenAIProviderConfig,
 )
-from omniplay.llm.message import LLMMessage, MessageRole
-from omniplay.llm.model import LLMModel
-from omniplay.llm.model_config import ModelConfig
-from omniplay.llm.options import LLMCallOptions, ReasoningEffort
-from omniplay.llm.providers.providers import Provider
-from omniplay.llm.response import (
+from plybench.llm.message import LLMMessage, MessageRole
+from plybench.llm.model import LLMModel
+from plybench.llm.model_config import ModelConfig
+from plybench.llm.options import LLMCallOptions, ReasoningEffort
+from plybench.llm.providers.providers import Provider
+from plybench.llm.response import (
     EmbeddingResponse,
     LLMResponse,
     LLMResponseItem,
     OutputText,
     ReasoningTrace,
 )
-from omniplay.llm.tokens import LLMTokens
+from plybench.llm.tokens import LLMTokens
 
 __all__ = [
     "LLM",
@@ -44,10 +44,10 @@ __all__ = [
 
 # The LLM router pulls the provider SDKs (openai / google-genai), so expose it lazily: importing the
 # light LLM value types (LLMMessage, ModelConfig, LLMResponse, ...) -- e.g. from core.prompt_adapter --
-# must not drag in those SDKs. `from omniplay.llm import LLM` still works (triggers this on access).
+# must not drag in those SDKs. `from plybench.llm import LLM` still works (triggers this on access).
 def __getattr__(name: str) -> object:
     if name == "LLM":
-        from omniplay.llm.router import LLM
+        from plybench.llm.router import LLM
 
         return LLM
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
