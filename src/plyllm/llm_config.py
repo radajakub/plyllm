@@ -19,6 +19,13 @@ class GeminiProviderConfig:
 
 
 @dataclass(frozen=True)
+class GrokProviderConfig:
+    api_key: str
+    # xAI ships an OpenAI-compatible endpoint; overridable via GROK_BASE_URL
+    base_url: str = "https://api.x.ai/v1"
+
+
+@dataclass(frozen=True)
 class MetacentrumProviderConfig:
     api_key: str
     base_url: str
@@ -38,6 +45,7 @@ class HuggingFaceProviderConfig:
 class LLMConfig:
     openai: OpenAIProviderConfig | None = None
     gemini: GeminiProviderConfig | None = None
+    grok: GrokProviderConfig | None = None
     metacentrum: MetacentrumProviderConfig | None = None
     huggingface: HuggingFaceProviderConfig | None = None
     default_concurrency: int = 10
@@ -63,6 +71,11 @@ class LLMConfig:
         if (gemini_key := get("GEMINI_API_KEY")) is not None:
             gemini = GeminiProviderConfig(api_key=gemini_key)
 
+        grok = None
+        if (grok_key := get("GROK_API_KEY")) is not None:
+            grok_url = get("GROK_BASE_URL")
+            grok = GrokProviderConfig(api_key=grok_key, base_url=grok_url) if grok_url else GrokProviderConfig(api_key=grok_key)
+
         metacentrum = None
         meta_key = get("METACENTRUM_API_KEY") or get("OS_API_KEY")
         meta_url = get("METACENTRUM_BASE_URL") or get("OS_BASE_URL")
@@ -76,6 +89,7 @@ class LLMConfig:
         return cls(
             openai=openai,
             gemini=gemini,
+            grok=grok,
             metacentrum=metacentrum,
             huggingface=huggingface,
             default_concurrency=default_concurrency,
