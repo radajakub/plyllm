@@ -1,4 +1,5 @@
 from plybench.llm.llm_config import (
+    ClaudeProviderConfig,
     GeminiProviderConfig,
     HuggingFaceProviderConfig,
     LLMConfig,
@@ -24,6 +25,7 @@ __all__ = [
     "LLMConfig",
     "OpenAIProviderConfig",
     "GeminiProviderConfig",
+    "ClaudeProviderConfig",
     "MetacentrumProviderConfig",
     "HuggingFaceProviderConfig",
     "LLMMessage",

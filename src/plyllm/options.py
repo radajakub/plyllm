@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-ReasoningEffort = Literal["minimal", "low", "medium", "high", "xhigh"]
+ReasoningEffort = Literal["minimal", "low", "medium", "high", "xhigh", "max"]
 
 
 @dataclass(frozen=True)

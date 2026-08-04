@@ -18,6 +18,7 @@ _CLIENT_MODULES = (
     ("plybench.llm.providers.openai.client", "OpenAILLMClient"),
     ("plybench.llm.providers.gemini.client", "GeminiLLMClient"),
     ("plybench.llm.providers.grok.client", "GrokLLMClient"),
+    ("plybench.llm.providers.claude.client", "ClaudeLLMClient"),
     ("plybench.llm.providers.metacentrum.client", "MetacentrumLLMClient"),
     ("plybench.llm.providers.huggingface.client", "HuggingFaceLLMClient"),
 )
