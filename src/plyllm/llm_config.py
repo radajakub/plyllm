@@ -26,6 +26,11 @@ class GrokProviderConfig:
 
 
 @dataclass(frozen=True)
+class ClaudeProviderConfig:
+    api_key: str
+
+
+@dataclass(frozen=True)
 class MetacentrumProviderConfig:
     api_key: str
     base_url: str
@@ -46,6 +51,7 @@ class LLMConfig:
     openai: OpenAIProviderConfig | None = None
     gemini: GeminiProviderConfig | None = None
     grok: GrokProviderConfig | None = None
+    claude: ClaudeProviderConfig | None = None
     metacentrum: MetacentrumProviderConfig | None = None
     huggingface: HuggingFaceProviderConfig | None = None
     default_concurrency: int = 10
@@ -76,6 +82,10 @@ class LLMConfig:
             grok_url = get("GROK_BASE_URL")
             grok = GrokProviderConfig(api_key=grok_key, base_url=grok_url) if grok_url else GrokProviderConfig(api_key=grok_key)
 
+        claude = None
+        if (claude_key := get("CLAUDE_API_KEY")) is not None:
+            claude = ClaudeProviderConfig(api_key=claude_key)
+
         metacentrum = None
         meta_key = get("METACENTRUM_API_KEY") or get("OS_API_KEY")
         meta_url = get("METACENTRUM_BASE_URL") or get("OS_BASE_URL")
@@ -90,6 +100,7 @@ class LLMConfig:
             openai=openai,
             gemini=gemini,
             grok=grok,
+            claude=claude,
             metacentrum=metacentrum,
             huggingface=huggingface,
             default_concurrency=default_concurrency,
