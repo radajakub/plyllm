@@ -1,4 +1,5 @@
 from plybench.llm.llm_config import (
+    DEFAULT_CONCURRENCY,
     ClaudeProviderConfig,
     GeminiProviderConfig,
     HuggingFaceProviderConfig,
@@ -23,6 +24,7 @@ from plybench.llm.tokens import LLMTokens
 __all__ = [
     "LLM",
     "LLMConfig",
+    "DEFAULT_CONCURRENCY",
     "OpenAIProviderConfig",
     "GeminiProviderConfig",
     "ClaudeProviderConfig",

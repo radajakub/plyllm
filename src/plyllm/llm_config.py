@@ -5,6 +5,9 @@ from dataclasses import dataclass
 
 from dotenv import dotenv_values
 
+# max in-flight requests per provider; this is the ceiling that actually protects against rate limits
+DEFAULT_CONCURRENCY = 10
+
 
 @dataclass(frozen=True)
 class OpenAIProviderConfig:
@@ -54,10 +57,10 @@ class LLMConfig:
     claude: ClaudeProviderConfig | None = None
     metacentrum: MetacentrumProviderConfig | None = None
     huggingface: HuggingFaceProviderConfig | None = None
-    default_concurrency: int = 10
+    default_concurrency: int = DEFAULT_CONCURRENCY
 
     @classmethod
-    def from_env(cls, default_concurrency: int = 10, huggingface_models: list[str] | None = None) -> LLMConfig:
+    def from_env(cls, default_concurrency: int | None = None, huggingface_models: list[str] | None = None) -> LLMConfig:
         # merge process env with a local .env file (env takes precedence)
         values: dict[str, str | None] = {**dotenv_values(), **os.environ}
 
@@ -103,5 +106,5 @@ class LLMConfig:
             claude=claude,
             metacentrum=metacentrum,
             huggingface=huggingface,
-            default_concurrency=default_concurrency,
+            default_concurrency=default_concurrency if default_concurrency is not None else DEFAULT_CONCURRENCY,
         )
