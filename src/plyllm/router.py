@@ -20,6 +20,7 @@ _CLIENT_MODULES = (
     ("plybench.llm.providers.gemini.client", "GeminiLLMClient"),
     ("plybench.llm.providers.grok.client", "GrokLLMClient"),
     ("plybench.llm.providers.claude.client", "ClaudeLLMClient"),
+    ("plybench.llm.providers.mistral.client", "MistralLLMClient"),
     ("plybench.llm.providers.metacentrum.client", "MetacentrumLLMClient"),
     ("plybench.llm.providers.huggingface.client", "HuggingFaceLLMClient"),
 )
@@ -48,8 +49,7 @@ class LLM:
     def _route(self, provider: Provider) -> LLMClient:
         client = self._provider_map.get(provider)
         if client is None:
-            raise ValueError(
-                f"Provider {provider.value} is not configured (missing credentials). Available providers: {[p.value for p in self._provider_map]}")
+            raise ValueError(f"Provider {provider.value} is not configured (missing credentials). Available providers: {[p.value for p in self._provider_map]}")
         return client
 
     def bootstrap(self) -> None:

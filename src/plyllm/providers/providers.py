@@ -6,5 +6,6 @@ class Provider(str, ExtendedEnum):
     GEMINI = "gemini"
     GROK = "grok"
     CLAUDE = "claude"
+    MISTRAL = "mistral"
     METACENTRUM = "metacentrum"
     HUGGINGFACE = "huggingface"

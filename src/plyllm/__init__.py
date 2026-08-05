@@ -2,9 +2,11 @@ from plybench.llm.llm_config import (
     DEFAULT_CONCURRENCY,
     ClaudeProviderConfig,
     GeminiProviderConfig,
+    GrokProviderConfig,
     HuggingFaceProviderConfig,
     LLMConfig,
     MetacentrumProviderConfig,
+    MistralProviderConfig,
     OpenAIProviderConfig,
 )
 from plybench.llm.message import LLMMessage, MessageRole
@@ -28,7 +30,9 @@ __all__ = [
     "DEFAULT_CONCURRENCY",
     "OpenAIProviderConfig",
     "GeminiProviderConfig",
+    "GrokProviderConfig",
     "ClaudeProviderConfig",
+    "MistralProviderConfig",
     "MetacentrumProviderConfig",
     "HuggingFaceProviderConfig",
     "LLMMessage",
