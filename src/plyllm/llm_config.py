@@ -34,6 +34,11 @@ class ClaudeProviderConfig:
 
 
 @dataclass(frozen=True)
+class MistralProviderConfig:
+    api_key: str
+
+
+@dataclass(frozen=True)
 class MetacentrumProviderConfig:
     api_key: str
     base_url: str
@@ -55,6 +60,7 @@ class LLMConfig:
     gemini: GeminiProviderConfig | None = None
     grok: GrokProviderConfig | None = None
     claude: ClaudeProviderConfig | None = None
+    mistral: MistralProviderConfig | None = None
     metacentrum: MetacentrumProviderConfig | None = None
     huggingface: HuggingFaceProviderConfig | None = None
     default_concurrency: int = DEFAULT_CONCURRENCY
@@ -89,6 +95,10 @@ class LLMConfig:
         if (claude_key := get("CLAUDE_API_KEY")) is not None:
             claude = ClaudeProviderConfig(api_key=claude_key)
 
+        mistral = None
+        if (mistral_key := get("MISTRAL_API_KEY")) is not None:
+            mistral = MistralProviderConfig(api_key=mistral_key)
+
         metacentrum = None
         meta_key = get("METACENTRUM_API_KEY") or get("OS_API_KEY")
         meta_url = get("METACENTRUM_BASE_URL") or get("OS_BASE_URL")
@@ -104,6 +114,7 @@ class LLMConfig:
             gemini=gemini,
             grok=grok,
             claude=claude,
+            mistral=mistral,
             metacentrum=metacentrum,
             huggingface=huggingface,
             default_concurrency=default_concurrency if default_concurrency is not None else DEFAULT_CONCURRENCY,
