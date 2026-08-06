@@ -91,7 +91,7 @@ class MetacentrumLLMClient(LLMClient):
         response = await self._semaphore.run(lambda: safe_call(lambda: method(**kwargs), retry_errors=_RETRY_ERRORS))
 
         if output_schema is not None:
-            reasoning = [content.text for item in response.output if item.type == "reasoningreasoning" for content in item.content if content.text is not None]
+            reasoning = [content.text for item in response.output if item.type == "reasoning" for content in item.content if content.text is not None]
             output_text = response.output_parsed.model_dump_json()
         else:
             output_text, reasoning = _extract_text_and_reasoning(response)
