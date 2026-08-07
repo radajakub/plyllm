@@ -6,7 +6,6 @@ from google.genai.types import Content, GenerateContentResponse, Part
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
-from plybench.llm.concurrency import safe_call
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.options import LLMCallOptions
@@ -17,6 +16,14 @@ from plybench.llm.tokens import LLMTokens
 
 _RETRY_ERRORS = (APIError,)
 _ROLE_MAP = {"user": "user", "assistant": "model", "system": "user"}
+
+
+def _total_tokens(response: GenerateContentResponse) -> int:
+    # what the rate gate charges against a tokens_per_minute quota
+    usage = response.usage_metadata
+    if usage is None:
+        return 0
+    return (usage.prompt_token_count or 0) + (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
 
 
 def _extract_reasoning(response: GenerateContentResponse) -> list[str]:
@@ -60,11 +67,14 @@ class GeminiLLMClient(LLMClient):
 
         contents = [Content(role=_ROLE_MAP[message.role], parts=[Part(text=message.content)]) for message in messages]
 
-        response = await self._semaphore.run(
-            lambda: safe_call(
-                lambda: self._client.models.generate_content(model=model.model_string, contents=contents, config=params),
-                retry_errors=_RETRY_ERRORS,
-            )
+        response = await self._dispatch(
+            model,
+            system,
+            messages,
+            options,
+            lambda: self._client.models.generate_content(model=model.model_string, contents=contents, config=params),
+            _RETRY_ERRORS,
+            tokens_of=_total_tokens,
         )
 
         usage = response.usage_metadata

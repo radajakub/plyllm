@@ -10,6 +10,7 @@ from plybench.llm.message import LLMMessage
 from plybench.llm.model import LLMModel
 from plybench.llm.model_config import ModelConfig
 from plybench.llm.providers.providers import Provider
+from plybench.llm.rate_limit import ModelLimits
 from plybench.llm.response import EmbeddingResponse, LLMResponse
 from plybench.llm.tokens import LLMTokens
 
@@ -47,7 +48,8 @@ class LLM:
     def _route(self, provider: Provider) -> LLMClient:
         client = self._provider_map.get(provider)
         if client is None:
-            raise ValueError(f"Provider {provider.value} is not configured (missing credentials). Available providers: {[p.value for p in self._provider_map]}")
+            raise ValueError(
+                f"Provider {provider.value} is not configured (missing credentials). Available providers: {[p.value for p in self._provider_map]}")
         return client
 
     def bootstrap(self) -> None:
@@ -70,6 +72,9 @@ class LLM:
 
     def set_concurrency(self, provider: Provider, concurrency: int | None) -> None:
         self._route(provider).set_concurrency(concurrency)
+
+    def set_model_limits(self, provider: Provider, model_name: str, limits: ModelLimits | None) -> None:
+        self._route(provider).set_model_limits(model_name, limits)
 
     async def generate(
         self,

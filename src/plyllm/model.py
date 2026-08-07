@@ -4,8 +4,13 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
+from plybench.llm.rate_limit import ModelLimits
 from plybench.llm.tokens import LLMTokens
 from plybench.utils.const import MILLION
+
+# output-side token guess used to size a rate reservation when the caller sets no max_tokens; only
+# consulted for models that carry a tokens_per_minute quota
+DEFAULT_OUTPUT_ESTIMATE = 8_000
 
 
 class LLMModel(ABC):
@@ -21,6 +26,8 @@ class LLMModel(ABC):
         can_use_json_schema: bool = True,
         weak_structured_output: bool = False,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
+        limits: ModelLimits | None = None,
+        default_output_estimate: int = DEFAULT_OUTPUT_ESTIMATE,
     ) -> None:
         self.model_name = model_name  # stable internal alias, used in configs/results
         self.model_string = model_string  # exact vendor id sent to the API
@@ -35,6 +42,9 @@ class LLMModel(ABC):
         # models without robust native structured output need the schema injected into the prompt
         self.weak_structured_output = weak_structured_output
         self.supported_reasoning = supported_reasoning
+        # per-model quota; None means only the provider-wide semaphore applies
+        self.limits = limits
+        self.default_output_estimate = default_output_estimate
 
     def cost(self, tokens: LLMTokens) -> float:
         uncached_cost = max(tokens.input_tokens - tokens.cached_input_tokens, 0) / MILLION * self.input_cost

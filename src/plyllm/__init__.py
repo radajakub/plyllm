@@ -12,6 +12,7 @@ from plybench.llm.model import LLMModel
 from plybench.llm.model_config import ModelConfig
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 from plybench.llm.providers.providers import Provider
+from plybench.llm.rate_limit import ModelLimits
 from plybench.llm.response import (
     EmbeddingResponse,
     LLMResponse,
@@ -34,6 +35,7 @@ __all__ = [
     "MessageRole",
     "LLMModel",
     "ModelConfig",
+    "ModelLimits",
     "LLMCallOptions",
     "Provider",
     "ReasoningEffort",
