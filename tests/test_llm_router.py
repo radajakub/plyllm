@@ -10,6 +10,7 @@ from plybench.llm import (
     LLMResponse,
     LLMTokens,
     ModelConfig,
+    ModelLimits,
     OpenAIProviderConfig,
     Provider,
 )
@@ -28,8 +29,10 @@ class _StubClient(LLMClient):
     provider_key = Provider.OPENAI
 
     def __init__(self) -> None:
-        super().__init__([_StubModel("stub-model", "stub-model-v1")], concurrency=2)
+        super().__init__([_StubModel("stub-model", "stub-model-v1")], concurrency=8)
         self.calls: list[tuple[str, LLMCallOptions]] = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
 
     @classmethod
     def build(cls, config: LLMConfig) -> "_StubClient":
@@ -41,13 +44,22 @@ class _StubClient(LLMClient):
     async def generate(self, model_name, system, messages, options, output_schema=None) -> LLMResponse:
         model = self.resolve_model(model_name)
         self.calls.append((model_name, options))
+        # routed through _dispatch like every real provider, so limits set on this model apply
+        tokens = await self._dispatch(model, system, messages, options, self._api_call, (), tokens_of=lambda value: value)
         return LLMResponse(
             provider=self.provider_key,
             model_string=model.model_string,
-            tokens=LLMTokens(input_tokens=5, output_tokens=7, reasoning_tokens=3),
+            tokens=LLMTokens(input_tokens=5, output_tokens=tokens - 5, reasoning_tokens=3),
             items=[OutputText(["ok"])],
             output_text="ok",
         )
+
+    async def _api_call(self) -> int:
+        self.in_flight += 1
+        self.peak_in_flight = max(self.peak_in_flight, self.in_flight)
+        await asyncio.sleep(0)
+        self.in_flight -= 1
+        return 12
 
     async def embed(self, model_name, texts) -> EmbeddingResponse:
         return EmbeddingResponse(self.provider_key, model_name, [[0.0]], EmbeddingTokens(1))
@@ -89,6 +101,36 @@ def test_resolve_unknown_model_raises():
     stub = _StubClient()
     with pytest.raises(ValueError):
         stub.resolve_model("does-not-exist")
+
+
+def test_model_limits_apply_to_any_provider():
+    # the gate is wired into the shared dispatch path, so limits are not Mistral-specific
+    llm = LLM(LLMConfig())
+    stub = _StubClient()
+    llm._provider_map[Provider.OPENAI] = stub
+    llm.set_model_limits(Provider.OPENAI, "stub-model", ModelLimits(max_concurrent=2))
+
+    async def scenario() -> None:
+        await asyncio.gather(*(llm.generate(ModelConfig(Provider.OPENAI, "stub-model"), LLMMessage.system("s"), [LLMMessage.user("u")]) for _ in range(6)))
+
+    asyncio.run(scenario())
+
+    # the provider semaphore allows 8, so anything below 6 proves the per-model gate bound it
+    assert stub.peak_in_flight == 2
+
+
+def test_dispatch_is_unbounded_without_limits():
+    llm = LLM(LLMConfig())
+    stub = _StubClient()
+    llm._provider_map[Provider.OPENAI] = stub
+
+    async def scenario() -> None:
+        await asyncio.gather(*(llm.generate(ModelConfig(Provider.OPENAI, "stub-model"), LLMMessage.system("s"), [LLMMessage.user("u")]) for _ in range(6)))
+
+    asyncio.run(scenario())
+
+    # only the provider semaphore (8) applies, so all six run together
+    assert stub.peak_in_flight == 6
 
 
 def test_cost_uses_routed_model():

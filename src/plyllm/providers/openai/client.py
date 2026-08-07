@@ -22,6 +22,14 @@ def _reasoning_summaries(response: Any) -> list[str]:
     return [summary.text for item in response.output if item.type == "reasoning" for summary in item.summary]
 
 
+def responses_total_tokens(response: Any) -> int:
+    # what the rate gate charges against a tokens_per_minute quota
+    usage = response.usage
+    if usage is None:
+        return 0
+    return (usage.input_tokens or 0) + (usage.output_tokens or 0)
+
+
 def responses_tokens(usage: Any) -> LLMTokens:
     input_details = getattr(usage, "input_tokens_details", None)
     output_details = getattr(usage, "output_tokens_details", None)
@@ -96,7 +104,7 @@ class OpenAILLMClient(LLMClient):
 
         method = self._client.responses.parse if output_schema is not None else self._client.responses.create
 
-        response = await self._semaphore.run(lambda: safe_call(lambda: method(**kwargs), retry_errors=_RETRY_ERRORS))
+        response = await self._dispatch(model, system, messages, options, lambda: method(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
 
         reasoning = _reasoning_summaries(response)
         output_text = response.output_parsed.model_dump_json() if output_schema is not None else response.output_text

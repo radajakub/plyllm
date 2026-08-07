@@ -6,12 +6,11 @@ from openai import APIConnectionError, APIError, APITimeoutError, AsyncOpenAI, R
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
-from plybench.llm.concurrency import safe_call
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
-from plybench.llm.providers.openai.client import build_response, responses_tokens
+from plybench.llm.providers.openai.client import build_response, responses_tokens, responses_total_tokens
 from plybench.llm.providers.providers import Provider
 from plybench.llm.response import EmbeddingResponse, LLMResponse
 
@@ -88,7 +87,7 @@ class MetacentrumLLMClient(LLMClient):
 
         method = self._client.responses.parse if output_schema is not None else self._client.responses.create
 
-        response = await self._semaphore.run(lambda: safe_call(lambda: method(**kwargs), retry_errors=_RETRY_ERRORS))
+        response = await self._dispatch(model, system, messages, options, lambda: method(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
 
         if output_schema is not None:
             reasoning = [content.text for item in response.output if item.type == "reasoning" for content in item.content if content.text is not None]

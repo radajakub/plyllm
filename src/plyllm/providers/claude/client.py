@@ -7,7 +7,6 @@ from anthropic.types import Message, MessageParam, OutputTokensDetails, ParsedMe
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
-from plybench.llm.concurrency import safe_call
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage, MessageRole
 from plybench.llm.options import LLMCallOptions
@@ -27,6 +26,12 @@ def _thinking_summaries(message: Message) -> list[str]:
 
 def _output_text(message: Message) -> str:
     return "".join(block.text for block in message.content if block.type == "text")
+
+
+def _total_tokens(result: tuple[ParsedMessage[Any], OutputTokensDetails | None]) -> int:
+    # what the rate gate charges against a tokens_per_minute quota
+    usage = result[0].usage
+    return usage.input_tokens + (usage.cache_read_input_tokens or 0) + (usage.cache_creation_input_tokens or 0) + usage.output_tokens
 
 
 def message_tokens(usage: Usage, output_details: OutputTokensDetails | None) -> LLMTokens:
@@ -89,7 +94,7 @@ class ClaudeLLMClient(LLMClient):
         if output_schema is not None:
             kwargs["output_format"] = output_schema
 
-        response, output_details = await self._semaphore.run(lambda: safe_call(lambda: self._final_message(kwargs), retry_errors=_RETRY_ERRORS))
+        response, output_details = await self._dispatch(model, system, messages, options, lambda: self._final_message(kwargs), _RETRY_ERRORS, tokens_of=_total_tokens)
 
         if response.stop_reason == "refusal":
             details = response.stop_details
