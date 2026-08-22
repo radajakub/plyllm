@@ -7,6 +7,7 @@ from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
 _DEFAULT_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})
 _KIMI_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "high", "max"})
+_QWEN3_8_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "xhigh"})
 
 
 class MetacentrumLLMModel(LLMModel):
@@ -52,6 +53,10 @@ class MetacentrumLLMModel(LLMModel):
                 if not (options.thinking_enabled and self.thinking):
                     return {}
                 return {"chat_template_kwargs": {"thinking": True}}
+            case "qwen-3.8-27b":
+                if not (options.thinking_enabled and self.thinking):
+                    return {"top_k": 20, "chat_template_kwargs": {"thinking": False}}
+                return {}
             case _:
                 return {}
 
@@ -64,5 +69,6 @@ def metacentrum_models() -> list[MetacentrumLLMModel]:
         MetacentrumLLMModel("glm-5.2", "glm-5.2", thinking=True, new_api=True, weak_structured_output=True),
         MetacentrumLLMModel("kimi-k3", "kimi-k3", thinking=True, new_api=True, supported_reasoning=_KIMI_REASONING),
         MetacentrumLLMModel("qwen-3.5", "qwen3.5", thinking=True, new_api=True),
+        MetacentrumLLMModel("qwen-3.8-27b", "qwen3.8-27b", thinking=True, new_api=True, supported_reasoning=_QWEN3_8_REASONING),
         MetacentrumLLMModel("mistral-small-4", "mistral-small-4", thinking=True, new_api=True),
     ]
