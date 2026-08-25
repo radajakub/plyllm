@@ -46,7 +46,7 @@ class MetacentrumProviderConfig:
 
 @dataclass(frozen=True)
 class HuggingFaceProviderConfig:
-    # supported model aliases (see huggingface_models()) to download/verify for this environment
+    # supported model aliases (see huggingface_embedding_models()) to download/verify for this environment
     models: tuple[str, ...]
     # HF_TOKEN, only needed for gated/private models
     token: str | None = None

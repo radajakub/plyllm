@@ -6,7 +6,7 @@ from mistralai.client.errors import MistralError
 from mistralai.client.models import AssistantMessage, ChatCompletionChoice, ChatCompletionResponse, TextChunk, ThinkChunk, UsageInfo
 from pydantic import BaseModel, ValidationError
 
-from plybench.llm import LLM, LLMCallOptions, LLMConfig, LLMMessage, MistralProviderConfig, ModelLimits, Provider
+from plybench.llm import LLM, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMMessage, MistralProviderConfig, ModelLimits, Provider
 from plybench.llm.providers.mistral.client import MistralLLMClient, _is_retryable, completion_tokens, split_content
 from plybench.llm.providers.mistral.models import MistralLLMModel, mistral_models
 from plybench.llm.rate_limit import ModelGate, NoLimits
@@ -237,4 +237,4 @@ def test_embeddings_are_not_supported():
     llm = LLM(LLMConfig(mistral=MistralProviderConfig(api_key="mk-test")))
 
     with pytest.raises(NotImplementedError):
-        asyncio.run(llm.embed(Provider.MISTRAL, "mistral-small-4", ["hello"]))
+        asyncio.run(llm.embed(EmbeddingModelConfig(Provider.MISTRAL, "mistral-small-4"), ["hello"], EmbeddingTask.SEARCH_QUERY))

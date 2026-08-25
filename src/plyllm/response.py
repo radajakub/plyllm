@@ -49,6 +49,13 @@ class LLMResponse:
 
 
 @dataclass(frozen=True)
+class EmbeddingBatch:
+    # one provider request worth of vectors, merged by LLMClient.embed into an EmbeddingResponse
+    embeddings: list[list[float]]
+    tokens: EmbeddingTokens
+
+
+@dataclass(frozen=True)
 class EmbeddingResponse:
     provider: Provider
     model_string: str

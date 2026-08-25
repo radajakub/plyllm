@@ -8,11 +8,12 @@ from pydantic import BaseModel
 from plybench.llm.client import LLMClient
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
+from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.grok.models import GrokLLMModel, grok_models
 from plybench.llm.providers.openai.client import _reasoning_summaries, build_response, responses_tokens, responses_total_tokens
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingResponse, LLMResponse
+from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
 
 _RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
 
@@ -21,7 +22,7 @@ class GrokLLMClient(LLMClient):
     provider_key = Provider.GROK
 
     def __init__(self, client: AsyncOpenAI, concurrency: int = 10) -> None:
-        super().__init__(grok_models(), concurrency)
+        super().__init__(grok_models(), [], concurrency)
         self._client = client
 
     @classmethod
@@ -68,5 +69,8 @@ class GrokLLMClient(LLMClient):
 
         return build_response(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
 
-    async def embed(self, model_name: str, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
+        raise NotImplementedError("Grok embeddings are not supported in this package")
+
+    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         raise NotImplementedError("Grok embeddings are not supported in this package")

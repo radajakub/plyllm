@@ -9,10 +9,11 @@ from pydantic import BaseModel
 from plybench.llm.client import LLMClient
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage, MessageRole
+from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
 from plybench.llm.tokens import LLMTokens
 
 _RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
@@ -50,7 +51,7 @@ class ClaudeLLMClient(LLMClient):
     provider_key = Provider.CLAUDE
 
     def __init__(self, client: AsyncAnthropic, concurrency: int = 10) -> None:
-        super().__init__(claude_models(), concurrency)
+        super().__init__(claude_models(), [], concurrency)
         self._client = client
 
     @classmethod
@@ -113,5 +114,8 @@ class ClaudeLLMClient(LLMClient):
 
         return LLMResponse(self.provider_key, model.model_string, tokens, items, output_text, output_schema)
 
-    async def embed(self, model_name: str, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
+        raise NotImplementedError("Claude embeddings are not supported in this package")
+
+    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         raise NotImplementedError("Claude embeddings are not supported in this package")

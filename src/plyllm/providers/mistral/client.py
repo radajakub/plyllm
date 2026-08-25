@@ -12,10 +12,11 @@ from pydantic import BaseModel
 from plybench.llm.client import LLMClient
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
+from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.mistral.models import MistralLLMModel, mistral_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
 from plybench.llm.tokens import LLMTokens
 
 # MistralError covers every HTTP failure, so the status predicate below decides what is worth
@@ -77,7 +78,7 @@ class MistralLLMClient(LLMClient):
     provider_key = Provider.MISTRAL
 
     def __init__(self, client: Mistral, concurrency: int = 10) -> None:
-        super().__init__(mistral_models(), concurrency)
+        super().__init__(mistral_models(), [], concurrency)
         self._client = client
 
     @classmethod
@@ -135,5 +136,8 @@ class MistralLLMClient(LLMClient):
 
         return LLMResponse(self.provider_key, model.model_string, completion_tokens(response.usage), items, output_text, output_schema)
 
-    async def embed(self, model_name: str, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
+        raise NotImplementedError("Mistral embeddings are not supported in this package")
+
+    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         raise NotImplementedError("Mistral embeddings are not supported in this package")

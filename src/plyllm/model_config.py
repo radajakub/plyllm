@@ -9,3 +9,9 @@ class ModelConfig:
     provider: Provider
     model_name: str
     options: LLMCallOptions = field(default_factory=LLMCallOptions)
+
+
+@dataclass(frozen=True)
+class EmbeddingModelConfig:
+    provider: Provider
+    model_name: str

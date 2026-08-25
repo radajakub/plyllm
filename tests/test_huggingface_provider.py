@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from plybench.llm import LLM, HuggingFaceProviderConfig, LLMConfig, Provider
+from plybench.llm import LLM, EmbeddingTask, HuggingFaceProviderConfig, LLMConfig, Provider
 from plybench.llm.providers.huggingface.client import HuggingFaceLLMClient
 
 
@@ -27,13 +27,13 @@ def test_router_wires_huggingface_when_configured():
 def test_embed_on_unverified_supported_model_raises():
     client = HuggingFaceLLMClient(HuggingFaceProviderConfig(models=("sup-simcse-bert",)))
     with pytest.raises(ValueError, match="has not been verified"):
-        asyncio.run(client.embed("sup-simcse-bert", ["hello"]))
+        asyncio.run(client.embed("sup-simcse-bert", ["hello"], EmbeddingTask.SEARCH_QUERY))
 
 
 def test_embed_on_unsupported_model_raises():
     client = HuggingFaceLLMClient(HuggingFaceProviderConfig(models=("sup-simcse-bert",)))
     with pytest.raises(ValueError, match="not found"):
-        asyncio.run(client.embed("not/supported", ["hello"]))
+        asyncio.run(client.embed("not/supported", ["hello"], EmbeddingTask.SEARCH_QUERY))
 
 
 def test_generate_not_supported():
@@ -50,7 +50,7 @@ def test_embed_produces_normalized_vectors():
     client = HuggingFaceLLMClient(HuggingFaceProviderConfig(models=("sup-simcse-bert",)))
     client.bootstrap()
 
-    resp = asyncio.run(client.embed("sup-simcse-bert", ["a game of nim", "a game of nim", "connect four"]))
+    resp = asyncio.run(client.embed("sup-simcse-bert", ["a game of nim", "a game of nim", "connect four"], EmbeddingTask.SEARCH_QUERY))
 
     assert resp.provider == Provider.HUGGINGFACE
     assert resp.model_string == "princeton-nlp/sup-simcse-bert-base-uncased"
@@ -79,6 +79,6 @@ def test_embed_empty_texts_returns_no_vectors():
     client = HuggingFaceLLMClient(HuggingFaceProviderConfig(models=("sup-simcse-bert",)))
     client.bootstrap()
 
-    resp = asyncio.run(client.embed("sup-simcse-bert", []))
+    resp = asyncio.run(client.embed("sup-simcse-bert", [], EmbeddingTask.SEARCH_QUERY))
     assert resp.embeddings == []
     assert resp.tokens.input_tokens == 0

@@ -6,13 +6,13 @@ from openai import APIConnectionError, APIError, APITimeoutError, AsyncOpenAI, R
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
-from plybench.llm.concurrency import safe_call
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
+from plybench.llm.model import EmbeddingModel
 from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.openai.models import openai_models
+from plybench.llm.providers.openai.models import openai_embedding_models, openai_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.response import EmbeddingBatch, LLMResponse, OutputText, ReasoningTrace
 from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
 _RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
@@ -60,7 +60,7 @@ class OpenAILLMClient(LLMClient):
     provider_key = Provider.OPENAI
 
     def __init__(self, client: AsyncOpenAI, concurrency: int = 10) -> None:
-        super().__init__(openai_models(), concurrency)
+        super().__init__(openai_models(), openai_embedding_models(), concurrency)
         self._client = client
 
     @classmethod
@@ -112,13 +112,20 @@ class OpenAILLMClient(LLMClient):
 
         return build_response(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
 
-    async def embed(self, model_name: str, texts: list[str]) -> EmbeddingResponse:
-        response = await self._semaphore.run(
-            lambda: safe_call(
-                lambda: self._client.embeddings.create(model=model_name, input=texts),
-                retry_errors=_RETRY_ERRORS,
-            )
+    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
+        response = await self._dispatch_embedding(
+            model,
+            texts,
+            lambda: (
+                self._client.embeddings.create(model=model.model_string, input=texts, dimensions=model.output_dimensionality)
+                if model.output_dimensionality is not None
+                else self._client.embeddings.create(model=model.model_string, input=texts)
+            ),
+            _RETRY_ERRORS,
+            tokens_of=lambda result: result.usage.total_tokens if result.usage is not None else 0,
         )
-        embeddings = [item.embedding for item in response.data]
+
+        # the API may return items out of order, so sort by the index it echoes back
+        items = sorted(response.data, key=lambda item: item.index)
         total_tokens = response.usage.total_tokens if response.usage is not None else 0
-        return EmbeddingResponse(self.provider_key, model_name, embeddings, EmbeddingTokens(total_tokens))
+        return EmbeddingBatch([item.embedding for item in items], EmbeddingTokens(total_tokens))

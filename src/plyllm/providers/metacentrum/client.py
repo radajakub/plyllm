@@ -8,11 +8,12 @@ from pydantic import BaseModel
 from plybench.llm.client import LLMClient
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
+from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
 from plybench.llm.providers.openai.client import build_response, responses_tokens, responses_total_tokens
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingResponse, LLMResponse
+from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
 
 _RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
 
@@ -47,7 +48,7 @@ class MetacentrumLLMClient(LLMClient):
     provider_key = Provider.METACENTRUM
 
     def __init__(self, client: AsyncOpenAI, concurrency: int = 4) -> None:
-        super().__init__(metacentrum_models(), concurrency)
+        super().__init__(metacentrum_models(), [], concurrency)
         self._client = client
 
     @classmethod
@@ -98,5 +99,8 @@ class MetacentrumLLMClient(LLMClient):
         tokens = responses_tokens(response.usage)
         return build_response(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
 
-    async def embed(self, model_name: str, texts: list[str]) -> EmbeddingResponse:
+    async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
+        raise NotImplementedError("Metacentrum embeddings are not supported in this package")
+
+    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         raise NotImplementedError("Metacentrum embeddings are not supported in this package")
