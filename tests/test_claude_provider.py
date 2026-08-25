@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from anthropic.types import OutputTokensDetails, Usage
 
-from plybench.llm import LLM, ClaudeProviderConfig, LLMCallOptions, LLMConfig, LLMTokens, Provider
+from plybench.llm import LLM, ClaudeProviderConfig, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMTokens, Provider
 from plybench.llm.providers.claude.client import message_tokens
 from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
 
@@ -114,4 +114,4 @@ def test_embed_not_supported():
     llm = LLM(LLMConfig(claude=ClaudeProviderConfig(api_key="sk-ant-test")))
 
     with pytest.raises(NotImplementedError):
-        asyncio.run(llm.embed(Provider.CLAUDE, "claude-opus-5", ["hello"]))
+        asyncio.run(llm.embed(EmbeddingModelConfig(Provider.CLAUDE, "claude-opus-5"), ["hello"], EmbeddingTask.SEARCH_QUERY))

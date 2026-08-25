@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from plybench.llm.model import LLMModel
+from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
 # GPT-5.4 / 5.5 / 5.6 standard models (docs also list none; 5.6 also lists max)
@@ -11,6 +11,8 @@ _GPT5_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"
 _GPT5_LEGACY_REASONING: frozenset[ReasoningEffort] = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 # Pro variants: medium / high / xhigh only
 _GPT5_PRO_REASONING: frozenset[ReasoningEffort] = frozenset({"medium", "high", "xhigh"})
+# the embeddings endpoint accepts up to 2048 inputs per request
+_EMBEDDING_BATCH_SIZE = 2048
 
 
 class OpenAILLMModel(LLMModel):
@@ -95,4 +97,17 @@ def openai_models() -> list[OpenAILLMModel]:
             new_api=True,
             supported_reasoning=_GPT5_LEGACY_REASONING,
         ),
+    ]
+
+
+class OpenAIEmbeddingModel(EmbeddingModel):
+    def format_texts(self, texts: list[str], task: EmbeddingTask) -> list[str]:
+        # OpenAI embeddings carry no task conditioning; the text goes out as-is
+        return texts
+
+
+def openai_embedding_models() -> list[EmbeddingModel]:
+    return [
+        OpenAIEmbeddingModel("text-embedding-3-small", "text-embedding-3-small", context_size=8191, input_cost=0.02, max_batch_size=_EMBEDDING_BATCH_SIZE),
+        OpenAIEmbeddingModel("text-embedding-3-large", "text-embedding-3-large", context_size=8191, input_cost=0.13, max_batch_size=_EMBEDDING_BATCH_SIZE),
     ]

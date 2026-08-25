@@ -10,19 +10,20 @@ from plybench.llm.llm_config import (
     OpenAIProviderConfig,
 )
 from plybench.llm.message import LLMMessage, MessageRole
-from plybench.llm.model import LLMModel
-from plybench.llm.model_config import ModelConfig
+from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
+from plybench.llm.model_config import EmbeddingModelConfig, ModelConfig
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 from plybench.llm.providers.providers import Provider
 from plybench.llm.rate_limit import ModelLimits
 from plybench.llm.response import (
+    EmbeddingBatch,
     EmbeddingResponse,
     LLMResponse,
     LLMResponseItem,
     OutputText,
     ReasoningTrace,
 )
-from plybench.llm.tokens import LLMTokens
+from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
 __all__ = [
     "LLM",
@@ -38,7 +39,10 @@ __all__ = [
     "LLMMessage",
     "MessageRole",
     "LLMModel",
+    "EmbeddingModel",
+    "EmbeddingTask",
     "ModelConfig",
+    "EmbeddingModelConfig",
     "ModelLimits",
     "LLMCallOptions",
     "Provider",
@@ -48,7 +52,9 @@ __all__ = [
     "ReasoningTrace",
     "OutputText",
     "EmbeddingResponse",
+    "EmbeddingBatch",
     "LLMTokens",
+    "EmbeddingTokens",
 ]
 
 

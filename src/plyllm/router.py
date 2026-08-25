@@ -7,12 +7,12 @@ from pydantic import BaseModel
 from plybench.llm.client import LLMClient
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
-from plybench.llm.model import LLMModel
-from plybench.llm.model_config import ModelConfig
+from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
+from plybench.llm.model_config import EmbeddingModelConfig, ModelConfig
 from plybench.llm.providers.providers import Provider
 from plybench.llm.rate_limit import ModelLimits
 from plybench.llm.response import EmbeddingResponse, LLMResponse
-from plybench.llm.tokens import LLMTokens
+from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
 # each provider SDK is an optional extra; wire up only the ones whose dependencies are installed
 _CLIENT_MODULES = (
@@ -64,17 +64,29 @@ class LLM:
     def get_available_models(self, provider: Provider) -> list[LLMModel]:
         return self._route(provider).get_available_models()
 
+    def get_available_embedding_models(self, provider: Provider) -> list[EmbeddingModel]:
+        return self._route(provider).get_available_embedding_models()
+
     def resolve_model(self, provider: Provider, model_name: str) -> LLMModel:
         return self._route(provider).resolve_model(model_name)
 
+    def resolve_embedding_model(self, provider: Provider, model_name: str) -> EmbeddingModel:
+        return self._route(provider).resolve_embedding_model(model_name)
+
     def calculate_cost(self, model_config: ModelConfig, tokens: LLMTokens) -> float:
         return self._route(model_config.provider).calculate_cost(model_config.model_name, tokens)
+
+    def calculate_embedding_cost(self, model_config: EmbeddingModelConfig, tokens: EmbeddingTokens) -> float:
+        return self._route(model_config.provider).calculate_embedding_cost(model_config.model_name, tokens)
 
     def set_concurrency(self, provider: Provider, concurrency: int | None) -> None:
         self._route(provider).set_concurrency(concurrency)
 
     def set_model_limits(self, provider: Provider, model_name: str, limits: ModelLimits | None) -> None:
         self._route(provider).set_model_limits(model_name, limits)
+
+    def set_embedding_model_limits(self, provider: Provider, model_name: str, limits: ModelLimits | None) -> None:
+        self._route(provider).set_embedding_model_limits(model_name, limits)
 
     async def generate(
         self,
@@ -92,5 +104,5 @@ class LLM:
             output_schema,
         )
 
-    async def embed(self, provider: Provider, model_name: str, texts: list[str]) -> EmbeddingResponse:
-        return await self._route(provider).embed(model_name, texts)
+    async def embed(self, model_config: EmbeddingModelConfig, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
+        return await self._route(model_config.provider).embed(model_config.model_name, texts, task)
