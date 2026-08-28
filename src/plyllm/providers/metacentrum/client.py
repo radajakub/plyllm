@@ -29,7 +29,7 @@ def _extract_text_and_reasoning(response: Any) -> tuple[str, list[str]]:
         else:
             continue
         for content in output.content:
-            if content.type == "output_text" and content.text is not None:
+            if content.type in ["output_text", "reasoning_text"] and content.text is not None:
                 target.append(content.text)
 
     text = "".join(text_parts)
