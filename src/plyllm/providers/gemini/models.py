@@ -103,6 +103,16 @@ class GeminiEmbeddingModel(EmbeddingModel):
 def gemini_models() -> list[GeminiLLMModel]:
     return [
         GeminiLLMModel(
+            "gemini-3.8-flash",
+            "gemini-3.8-flash",
+            input_cost=0.75,
+            output_cost=3.75,
+            thinking=True,
+            thinking_only=True,
+            uses_thinking_level=True,
+            supported_reasoning=_GEMINI_REASONING,
+        ),
+        GeminiLLMModel(
             "gemini-3.7-flash",
             "gemini-3.7-flash",
             input_cost=0.75,
