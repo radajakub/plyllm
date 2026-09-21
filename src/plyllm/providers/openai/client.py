@@ -10,7 +10,7 @@ from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel
 from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.openai.models import openai_embedding_models, openai_models
+from plybench.llm.providers.openai.models import OpenAILLMModel, openai_embedding_models, openai_models
 from plybench.llm.providers.providers import Provider
 from plybench.llm.response import EmbeddingBatch, LLMResponse, OutputText, ReasoningTrace
 from plybench.llm.tokens import EmbeddingTokens, LLMTokens
@@ -31,6 +31,8 @@ def responses_total_tokens(response: Any) -> int:
 
 
 def responses_tokens(usage: Any) -> LLMTokens:
+    if usage is None:
+        return LLMTokens(input_tokens=0, output_tokens=0, cached_input_tokens=0, reasoning_tokens=0)
     input_details = getattr(usage, "input_tokens_details", None)
     output_details = getattr(usage, "output_tokens_details", None)
     return LLMTokens(
@@ -56,7 +58,7 @@ def build_response(
     return LLMResponse(provider, model_string, tokens, items, output_text, output_schema)
 
 
-class OpenAILLMClient(LLMClient):
+class OpenAILLMClient(LLMClient[OpenAILLMModel]):
     provider_key = Provider.OPENAI
 
     def __init__(self, client: AsyncOpenAI, concurrency: int = 10) -> None:
@@ -107,7 +109,7 @@ class OpenAILLMClient(LLMClient):
         response = await self._dispatch(model, system, messages, options, lambda: method(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
 
         reasoning = _reasoning_summaries(response)
-        output_text = response.output_parsed.model_dump_json() if output_schema is not None else response.output_text
+        output_text = response.output_parsed.model_dump_json() if output_schema is not None and response.output_parsed is not None else response.output_text
         tokens = responses_tokens(response.usage)
 
         return build_response(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)

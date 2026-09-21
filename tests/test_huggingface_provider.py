@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from plybench.llm import LLM, EmbeddingTask, HuggingFaceProviderConfig, LLMConfig, Provider
+from plybench.llm import LLM, EmbeddingTask, HuggingFaceProviderConfig, LLMCallOptions, LLMConfig, LLMMessage, Provider
 from plybench.llm.providers.huggingface.client import HuggingFaceLLMClient
 
 
@@ -39,7 +39,7 @@ def test_embed_on_unsupported_model_raises():
 def test_generate_not_supported():
     client = HuggingFaceLLMClient(HuggingFaceProviderConfig(models=("sup-simcse-bert",)))
     with pytest.raises(NotImplementedError):
-        asyncio.run(client.generate("sup-simcse-bert", None, [], None))
+        asyncio.run(client.generate("sup-simcse-bert", LLMMessage.system("test"), [], LLMCallOptions()))
 
 
 def test_embed_produces_normalized_vectors():

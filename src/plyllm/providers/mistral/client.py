@@ -74,7 +74,7 @@ def split_content(message: AssistantMessage | None) -> tuple[list[str], str]:
     return reasoning, "".join(output)
 
 
-class MistralLLMClient(LLMClient):
+class MistralLLMClient(LLMClient[MistralLLMModel]):
     provider_key = Provider.MISTRAL
 
     def __init__(self, client: Mistral, concurrency: int = 10) -> None:

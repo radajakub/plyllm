@@ -1,7 +1,9 @@
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
+import plybench.llm.router as router
 from plybench.llm import (
     LLM,
     EmbeddingModelConfig,
@@ -98,6 +100,30 @@ def test_build_creates_configured_provider_only():
     config = LLMConfig(openai=OpenAIProviderConfig(api_key="sk-test"))
     llm = LLM(config)
     assert llm.available_providers == [Provider.OPENAI]
+
+
+def test_build_imports_only_configured_provider(monkeypatch):
+    imported: list[str] = []
+
+    def fake_import(module_path: str) -> SimpleNamespace:
+        imported.append(module_path)
+        return SimpleNamespace(OpenAILLMClient=_StubClient)
+
+    monkeypatch.setattr(router.importlib, "import_module", fake_import)
+    assert LLM(LLMConfig()).available_providers == []
+    assert imported == []
+
+    llm = LLM(LLMConfig(openai=OpenAIProviderConfig(api_key="sk-test")))
+    assert llm.available_providers == [Provider.OPENAI]
+    assert imported == ["plybench.llm.providers.openai.client"]
+
+
+def test_configured_provider_without_extra_is_skipped(monkeypatch):
+    def missing_import(module_path: str) -> None:
+        raise ImportError(module_path)
+
+    monkeypatch.setattr(router.importlib, "import_module", missing_import)
+    assert LLM(LLMConfig(openai=OpenAIProviderConfig(api_key="sk-test"))).available_providers == []
 
 
 def test_routing_dispatches_on_provider_and_records_model_string():

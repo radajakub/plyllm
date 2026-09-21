@@ -18,7 +18,7 @@ from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
 _RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
 
 
-class GrokLLMClient(LLMClient):
+class GrokLLMClient(LLMClient[GrokLLMModel]):
     provider_key = Provider.GROK
 
     def __init__(self, client: AsyncOpenAI, concurrency: int = 10) -> None:
@@ -64,7 +64,7 @@ class GrokLLMClient(LLMClient):
         response = await self._dispatch(model, system, messages, options, lambda: method(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
 
         reasoning = _reasoning_summaries(response)
-        output_text = response.output_parsed.model_dump_json() if output_schema is not None else response.output_text
+        output_text = response.output_parsed.model_dump_json() if output_schema is not None and response.output_parsed is not None else response.output_text
         tokens = responses_tokens(response.usage)
 
         return build_response(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)

@@ -1,7 +1,9 @@
 import asyncio
+from typing import cast
 
 import httpx
 import pytest
+from mistralai.client import Mistral
 from mistralai.client.errors import MistralError
 from mistralai.client.models import AssistantMessage, ChatCompletionChoice, ChatCompletionResponse, TextChunk, ThinkChunk, UsageInfo
 from pydantic import BaseModel, ValidationError
@@ -188,7 +190,7 @@ def _response(message: AssistantMessage) -> ChatCompletionResponse:
 
 def _client(message: AssistantMessage) -> tuple[MistralLLMClient, _FakeSDK]:
     sdk = _FakeSDK(_response(message))
-    return MistralLLMClient(sdk, concurrency=4), sdk
+    return MistralLLMClient(cast(Mistral, sdk), concurrency=4), sdk
 
 
 def test_generate_puts_the_system_prompt_at_the_head_of_the_messages():
