@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# The Hugging Face SDKs are optional and imported at runtime only when this provider is used.
+# pyright: reportMissingImports=false
 import asyncio
 from types import ModuleType
 from typing import TYPE_CHECKING

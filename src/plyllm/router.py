@@ -14,25 +14,27 @@ from plybench.llm.rate_limit import ModelLimits
 from plybench.llm.response import EmbeddingResponse, LLMResponse
 from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
-# each provider SDK is an optional extra; wire up only the ones whose dependencies are installed
+# Each provider SDK is an optional extra. Import a provider only when it is configured.
 _CLIENT_MODULES = (
-    ("plybench.llm.providers.openai.client", "OpenAILLMClient"),
-    ("plybench.llm.providers.gemini.client", "GeminiLLMClient"),
-    ("plybench.llm.providers.grok.client", "GrokLLMClient"),
-    ("plybench.llm.providers.claude.client", "ClaudeLLMClient"),
-    ("plybench.llm.providers.mistral.client", "MistralLLMClient"),
-    ("plybench.llm.providers.metacentrum.client", "MetacentrumLLMClient"),
-    ("plybench.llm.providers.huggingface.client", "HuggingFaceLLMClient"),
+    (Provider.OPENAI, "plybench.llm.providers.openai.client", "OpenAILLMClient"),
+    (Provider.GEMINI, "plybench.llm.providers.gemini.client", "GeminiLLMClient"),
+    (Provider.GROK, "plybench.llm.providers.grok.client", "GrokLLMClient"),
+    (Provider.CLAUDE, "plybench.llm.providers.claude.client", "ClaudeLLMClient"),
+    (Provider.MISTRAL, "plybench.llm.providers.mistral.client", "MistralLLMClient"),
+    (Provider.METACENTRUM, "plybench.llm.providers.metacentrum.client", "MetacentrumLLMClient"),
+    (Provider.HUGGINGFACE, "plybench.llm.providers.huggingface.client", "HuggingFaceLLMClient"),
 )
 
 
-def _client_builders() -> list[type[LLMClient]]:
+def _client_builders(config: LLMConfig) -> list[type[LLMClient]]:
     builders: list[type[LLMClient]] = []
-    for module_path, class_name in _CLIENT_MODULES:
+    for provider, module_path, class_name in _CLIENT_MODULES:
+        if getattr(config, provider.value) is None:
+            continue
         try:
             module = importlib.import_module(module_path)
         except ImportError:
-            # provider extra not installed -- skip it
+            # Preserve the optional-extra behavior: an unavailable provider is skipped.
             continue
         builders.append(getattr(module, class_name))
     return builders
@@ -41,7 +43,7 @@ def _client_builders() -> list[type[LLMClient]]:
 class LLM:
     def __init__(self, config: LLMConfig) -> None:
         self._provider_map: dict[Provider, LLMClient] = {}
-        for builder in _client_builders():
+        for builder in _client_builders(config):
             client = builder.build(config)
             if client is not None:
                 self._provider_map[client.provider_key] = client

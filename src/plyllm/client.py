@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -18,13 +18,14 @@ from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
 from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
 T = TypeVar("T")
+ModelT = TypeVar("ModelT", bound=LLMModel)
 
 
-class LLMClient(ABC):
+class LLMClient(ABC, Generic[ModelT]):
     provider_key: Provider
 
-    def __init__(self, models: Sequence[LLMModel], embedding_models: Sequence[EmbeddingModel], concurrency: int = 10) -> None:
-        self._models: dict[str, LLMModel] = {model.model_name: model for model in models}
+    def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int = 10) -> None:
+        self._models: dict[str, ModelT] = {model.model_name: model for model in models}
         self._embedding_models: dict[str, EmbeddingModel] = {model.model_name: model for model in embedding_models}
         self._semaphore = ProviderSemaphore(concurrency)
         # the provider semaphore is the aggregate ceiling; gates shape each model within it
@@ -42,7 +43,7 @@ class LLMClient(ABC):
         # override this; remote providers keep the no-op default
         return None
 
-    def resolve_model(self, model_name: str) -> LLMModel:
+    def resolve_model(self, model_name: str) -> ModelT:
         model = self._models.get(model_name, None)
         if model is None:
             raise ValueError(f"Model {model_name} not found for provider {self.provider_key.value}")
@@ -54,7 +55,7 @@ class LLMClient(ABC):
             raise ValueError(f"Embedding model {model_name} not found for provider {self.provider_key.value}")
         return model
 
-    def get_available_models(self) -> list[LLMModel]:
+    def get_available_models(self) -> list[ModelT]:
         return list(self._models.values())
 
     def get_available_embedding_models(self) -> list[EmbeddingModel]:

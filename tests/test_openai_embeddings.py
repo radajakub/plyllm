@@ -1,7 +1,9 @@
 import asyncio
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from openai import AsyncOpenAI
 
 from plybench.llm.model import EmbeddingTask
 from plybench.llm.providers.openai.client import OpenAILLMClient
@@ -25,8 +27,16 @@ class _FakeClient:
         self.embeddings = _FakeEmbeddings()
 
 
-def _client() -> OpenAILLMClient:
-    return OpenAILLMClient(_FakeClient(), concurrency=3)
+class _FakeOpenAIClient(OpenAILLMClient):
+    def __init__(self) -> None:
+        fake = _FakeClient()
+        self.fake_embeddings = fake.embeddings
+        # This test double implements the embedding methods exercised here.
+        super().__init__(cast(AsyncOpenAI, fake), concurrency=3)
+
+
+def _client() -> _FakeOpenAIClient:
+    return _FakeOpenAIClient()
 
 
 def test_embed_realigns_vectors_to_their_inputs():
@@ -34,7 +44,7 @@ def test_embed_realigns_vectors_to_their_inputs():
 
     resp = asyncio.run(client.embed(_MODEL, ["a", "b", "c"], EmbeddingTask.SEARCH_QUERY))
 
-    call = client._client.embeddings.calls[0]
+    call = client.fake_embeddings.calls[0]
     assert call["model"] == _MODEL
     # OpenAI embeddings take no task conditioning
     assert call["input"] == ["a", "b", "c"]
@@ -49,7 +59,7 @@ def test_embed_forwards_dimensions_only_when_set():
 
     asyncio.run(client.embed(_MODEL, ["a"], EmbeddingTask.SEARCH_QUERY))
 
-    assert client._client.embeddings.calls[0]["dimensions"] == 256
+    assert client.fake_embeddings.calls[0]["dimensions"] == 256
 
 
 def test_unknown_embedding_model_is_rejected():

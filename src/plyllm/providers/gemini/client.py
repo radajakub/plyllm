@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from google import genai
 from google.genai.errors import APIError
-from google.genai.types import Content, EmbedContentConfig, EmbedContentResponse, GenerateContentResponse, Part
+from google.genai.types import Content, ContentUnion, EmbedContentConfig, EmbedContentResponse, GenerateContentResponse, Part
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
@@ -57,7 +57,7 @@ def _embedding_tokens(response: EmbedContentResponse, texts: list[str]) -> int:
     return estimate_prompt_tokens(*texts)
 
 
-class GeminiLLMClient(LLMClient):
+class GeminiLLMClient(LLMClient[GeminiLLMModel]):
     provider_key = Provider.GEMINI
 
     def __init__(self, client: genai.client.AsyncClient, concurrency: int = 20) -> None:
@@ -94,7 +94,7 @@ class GeminiLLMClient(LLMClient):
             params.response_mime_type = "application/json"
             params.response_schema = output_schema
 
-        contents = [Content(role=_ROLE_MAP[message.role], parts=[Part(text=message.content)]) for message in messages]
+        contents: list[ContentUnion] = [Content(role=_ROLE_MAP[message.role], parts=[Part(text=message.content)]) for message in messages]
 
         response = await self._dispatch(
             model,
@@ -108,10 +108,10 @@ class GeminiLLMClient(LLMClient):
         )
 
         usage = response.usage_metadata
-        reasoning_tokens = usage.thoughts_token_count or 0
-        candidate_tokens = usage.candidates_token_count or 0
-        input_tokens = usage.prompt_token_count or 0
-        cached_tokens = usage.cached_content_token_count or 0
+        reasoning_tokens = (usage.thoughts_token_count or 0) if usage is not None else 0
+        candidate_tokens = (usage.candidates_token_count or 0) if usage is not None else 0
+        input_tokens = (usage.prompt_token_count or 0) if usage is not None else 0
+        cached_tokens = (usage.cached_content_token_count or 0) if usage is not None else 0
 
         tokens = LLMTokens(
             input_tokens=input_tokens,
@@ -132,7 +132,7 @@ class GeminiLLMClient(LLMClient):
 
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         # one Content per text: passing bare parts would return a single aggregated vector instead
-        contents = [Content(parts=[Part.from_text(text=text)]) for text in texts]
+        contents: list[ContentUnion] = [Content(parts=[Part.from_text(text=text)]) for text in texts]
         config = EmbedContentConfig(output_dimensionality=model.output_dimensionality)
 
         response = await self._dispatch_embedding(

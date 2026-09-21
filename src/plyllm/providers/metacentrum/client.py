@@ -44,7 +44,7 @@ def _extract_text_and_reasoning(response: Any) -> tuple[str, list[str]]:
     return text, reasoning_summaries
 
 
-class MetacentrumLLMClient(LLMClient):
+class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
     provider_key = Provider.METACENTRUM
 
     def __init__(self, client: AsyncOpenAI, concurrency: int = 4) -> None:
@@ -91,8 +91,8 @@ class MetacentrumLLMClient(LLMClient):
         response = await self._dispatch(model, system, messages, options, lambda: method(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
 
         if output_schema is not None:
-            reasoning = [content.text for item in response.output if item.type == "reasoning" for content in item.content if content.text is not None]
-            output_text = response.output_parsed.model_dump_json()
+            reasoning = [content.text for item in response.output if item.type == "reasoning" for content in item.content or [] if content.text is not None]
+            output_text = response.output_parsed.model_dump_json() if response.output_parsed is not None else response.output_text
         else:
             output_text, reasoning = _extract_text_and_reasoning(response)
 

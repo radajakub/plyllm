@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from google.genai.types import GenerateContentConfig, ThinkingConfig
+from google.genai.types import GenerateContentConfig, ThinkingConfig, ThinkingLevel
 
 from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
@@ -57,7 +57,7 @@ class GeminiLLMModel(LLMModel):
 
         if options.thinking_enabled:
             if self.uses_thinking_level:
-                thinking_config = ThinkingConfig(include_thoughts=True, thinking_level=effort)
+                thinking_config = ThinkingConfig(include_thoughts=True, thinking_level=ThinkingLevel(effort))
             else:
                 thinking_config = ThinkingConfig(include_thoughts=True, thinking_budget=_BUDGET_BY_EFFORT[effort])
             return GenerateContentConfig(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from anthropic import APIConnectionError, APIError, APITimeoutError, AsyncAnthropic, RateLimitError
 from anthropic.types import Message, MessageParam, OutputTokensDetails, ParsedMessage, TextBlockParam, Usage
@@ -16,9 +16,11 @@ from plybench.llm.providers.providers import Provider
 from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
 from plybench.llm.tokens import LLMTokens
 
+AnthropicRoles = Literal["user", "assistant", "system"]
+
 _RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
 # the messages array only carries the conversation; the system prompt is a separate request field
-_ROLE_MAP: dict[MessageRole, str] = {"user": "user", "assistant": "assistant", "system": "user"}
+_ROLE_MAP: dict[MessageRole, AnthropicRoles] = {"user": "user", "assistant": "assistant", "system": "user"}
 
 
 def _thinking_summaries(message: Message) -> list[str]:
@@ -47,7 +49,7 @@ def message_tokens(usage: Usage, output_details: OutputTokensDetails | None) -> 
     )
 
 
-class ClaudeLLMClient(LLMClient):
+class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
     provider_key = Provider.CLAUDE
 
     def __init__(self, client: AsyncAnthropic, concurrency: int = 10) -> None:
@@ -89,7 +91,7 @@ class ClaudeLLMClient(LLMClient):
         params = model.extract_params(options)
         # the breakpoint sits on the system prompt, so the varying turns stay outside the cached prefix
         system_blocks: list[TextBlockParam] = [{"type": "text", "text": system.content, "cache_control": {"type": "ephemeral"}}]
-        contents: list[MessageParam] = [{"role": _ROLE_MAP[message.role], "content": message.content} for message in messages]
+        contents: list[MessageParam] = [MessageParam(role=_ROLE_MAP[message.role], content=message.content) for message in messages]
 
         kwargs: dict[str, Any] = dict(model=model.model_string, system=system_blocks, messages=contents, **params)
         if output_schema is not None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import TypeVar, overload
 
 from pydantic import BaseModel
 
@@ -41,7 +41,13 @@ class LLMResponse:
     def reasoning(self) -> list[str]:
         return [summary for item in self.items if isinstance(item, ReasoningTrace) for summary in item.summaries]
 
-    def resolve_structured_output(self, model: type[T] | None = None) -> T | None:
+    @overload
+    def resolve_structured_output(self, model: type[T]) -> T: ...
+
+    @overload
+    def resolve_structured_output(self, model: None = None) -> BaseModel | None: ...
+
+    def resolve_structured_output(self, model: type[BaseModel] | None = None) -> BaseModel | None:
         schema = model if model is not None else self.structured_output_type
         if schema is None:
             return None

@@ -1,6 +1,8 @@
 import asyncio
+from typing import cast
 
 import pytest
+from google.genai.client import AsyncClient
 from google.genai.errors import APIError
 from google.genai.types import ContentEmbedding, ContentEmbeddingStatistics, EmbedContentResponse
 
@@ -32,8 +34,16 @@ class _FakeClient:
         self.models = _FakeModels(embeddings_per_call)
 
 
-def _client(embeddings_per_call: list[list[ContentEmbedding]]) -> GeminiLLMClient:
-    return GeminiLLMClient(_FakeClient(embeddings_per_call), concurrency=4)
+class _FakeGeminiClient(GeminiLLMClient):
+    def __init__(self, embeddings_per_call: list[list[ContentEmbedding]]) -> None:
+        fake = _FakeClient(embeddings_per_call)
+        self.fake_models = fake.models
+        # This test double implements the embedding methods exercised here.
+        super().__init__(cast(AsyncClient, fake), concurrency=4)
+
+
+def _client(embeddings_per_call: list[list[ContentEmbedding]]) -> _FakeGeminiClient:
+    return _FakeGeminiClient(embeddings_per_call)
 
 
 def test_gemini_prefixes_query_and_document():
@@ -58,7 +68,7 @@ def test_embed_sends_one_content_per_text_and_reports_tokens():
 
     resp = asyncio.run(client.embed(_MODEL, ["hello", "world"], EmbeddingTask.SEARCH_QUERY))
 
-    call = client._client.models.calls[0]
+    call = client.fake_models.calls[0]
     assert call["model"] == _MODEL
     # one Content per text: bare parts would come back as a single aggregated vector
     assert [content.parts[0].text for content in call["contents"]] == ["task: search result | query: hello", "task: search result | query: world"]
@@ -84,7 +94,7 @@ def test_embed_splits_batches_over_the_model_limit():
 
     resp = asyncio.run(client.embed(_MODEL, ["a", "b", "c"], EmbeddingTask.CLUSTERING))
 
-    assert [len(call["contents"]) for call in client._client.models.calls] == [2, 1]
+    assert [len(call["contents"]) for call in client.fake_models.calls] == [2, 1]
     assert resp.embeddings == [[1.0], [2.0], [3.0]]
 
 
@@ -94,7 +104,7 @@ def test_embed_passes_output_dimensionality():
 
     asyncio.run(client.embed(_MODEL, ["hello"], EmbeddingTask.SEARCH_QUERY))
 
-    assert client._client.models.calls[0]["config"].output_dimensionality == 768
+    assert client.fake_models.calls[0]["config"].output_dimensionality == 768
 
 
 def test_embed_rejects_a_truncated_input():
@@ -123,7 +133,7 @@ def test_embed_rejects_input_over_the_context_size():
 
     with pytest.raises(ValueError, match="over the 8192-token context"):
         asyncio.run(client.embed(_MODEL, ["x" * 40_000], EmbeddingTask.SEARCH_DOCUMENT))
-    assert client._client.models.calls == []
+    assert client.fake_models.calls == []
 
 
 @pytest.mark.parametrize(
