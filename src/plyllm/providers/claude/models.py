@@ -7,7 +7,7 @@ from anthropic.types import ThinkingConfigParam
 from plybench.llm.model import LLMModel
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
-# Claude Opus 5 / Opus 4.8 / Sonnet 5 / Fable 5 accept the whole effort ladder
+# Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Opus 4.8 / Sonnet 5 accept the whole effort ladder
 _EFFORT_FULL: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh", "max"})
 # Sonnet 4.6 predates the xhigh level
 _EFFORT_NO_XHIGH: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "max"})
@@ -98,17 +98,39 @@ class ClaudeLLMModel(LLMModel):
 
 
 def claude_models() -> list[ClaudeLLMModel]:
-    # prices are USD per 1M tokens; cached_input_cost is the cache-read rate (0.1x input)
+    # prices are USD per 1M tokens; cached_input_cost is the cache-read rate (0.1x input, except
+    # Fable 5.1 at 0.025x and Opus 5.5 at 0.05x)
     return [
-        # Claude Fable 5 (thinking cannot be disabled; requires 30-day data retention on the org)
+        # Claude Fable 5.x (thinking cannot be disabled; requires 30-day data retention on the org)
+        ClaudeLLMModel(
+            "claude-fable-5.1",
+            "claude-fable-5-1",
+            input_cost=10.0,
+            output_cost=50.0,
+            cached_input_cost=0.25,
+            thinking=True,
+            thinking_only=True,
+            supported_reasoning=_EFFORT_FULL,
+        ),
         ClaudeLLMModel(
             "claude-fable-5", "claude-fable-5", input_cost=10.0, output_cost=50.0, cached_input_cost=1.0, thinking=True, thinking_only=True, supported_reasoning=_EFFORT_FULL
+        ),
+        # Claude Opus 5.5 (thinking cannot be disabled at any effort level; default effort is medium)
+        ClaudeLLMModel(
+            "claude-opus-5.5",
+            "claude-opus-5-5",
+            input_cost=4.0,
+            output_cost=20.0,
+            cached_input_cost=0.2,
+            thinking=True,
+            thinking_only=True,
+            supported_reasoning=_EFFORT_FULL,
         ),
         # Claude Opus 5 (thinking is adaptive by default)
         ClaudeLLMModel("claude-opus-5", "claude-opus-5", input_cost=5.0, output_cost=25.0, cached_input_cost=0.5, thinking=True, supported_reasoning=_EFFORT_FULL),
         ClaudeLLMModel("claude-opus-4.8", "claude-opus-4-8", input_cost=5.0, output_cost=25.0, cached_input_cost=0.5, thinking=True, supported_reasoning=_EFFORT_FULL),
         # Claude Sonnet 5
-        ClaudeLLMModel("claude-sonnet-5", "claude-sonnet-5", input_cost=3.0, output_cost=15.0, cached_input_cost=0.3, thinking=True, supported_reasoning=_EFFORT_FULL),
+        ClaudeLLMModel("claude-sonnet-5", "claude-sonnet-5", input_cost=2.0, output_cost=10.0, cached_input_cost=0.2, thinking=True, supported_reasoning=_EFFORT_FULL),
         ClaudeLLMModel(
             "claude-sonnet-4.6",
             "claude-sonnet-4-6",

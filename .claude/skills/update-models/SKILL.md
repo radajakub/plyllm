@@ -3,6 +3,13 @@ name: update-models
 description: Update supported model definitions using current official provider documentation.
 ---
 
+Read `references/sources.md` before step 2. For every provider it gives the exact official
+documentation URLs to fetch, the repository's conventions for that provider (which pricing tier,
+the cache-read multiplier, how thinking and effort are encoded), and the places where a provider's
+own pages contradict each other. It is a shortcut past the search, not a substitute for the docs:
+always re-fetch the pages and verify against them. Update `references/sources.md` in the same change
+whenever a URL moves, a provider is added, or a convention changes.
+
 For every model provider supported by this repository:
 
 1. Inspect the repository to find the provider's model definitions and related metadata.

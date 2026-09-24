@@ -5,8 +5,10 @@ from typing import Any
 from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
-# GPT-5.4 / 5.5 / 5.6 standard models (docs also list none; 5.6 also lists max)
+# GPT-5.4 / 5.5 standard models (docs also list none, which the harness expresses as thinking off)
 _GPT5_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh"})
+# GPT-5.6 standard models additionally accept max
+_GPT56_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh", "max"})
 # Original GPT-5 mini/nano also accept minimal
 _GPT5_LEGACY_REASONING: frozenset[ReasoningEffort] = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 # Pro variants: medium / high / xhigh only
@@ -64,9 +66,11 @@ def openai_models() -> list[OpenAILLMModel]:
         OpenAILLMModel("gpt-6-sol", "gpt-6-sol", input_cost=2.0, output_cost=10.0, cached_input_cost=0.2, thinking=True, new_api=True, supported_reasoning=_GPT6_REASONING),
         OpenAILLMModel("gpt-6-luna", "gpt-6-luna", input_cost=0.1, output_cost=0.5, cached_input_cost=0.01, thinking=True, new_api=True, supported_reasoning=_GPT6_REASONING),
         # GPT-5.6
-        OpenAILLMModel("gpt-5.6-sol", "gpt-5.6-sol", input_cost=4.0, output_cost=20.0, cached_input_cost=0.4, thinking=True, new_api=True, supported_reasoning=_GPT5_REASONING),
-        OpenAILLMModel("gpt-5.6-terra", "gpt-5.6-terra", input_cost=2.0, output_cost=12.0, cached_input_cost=0.2, thinking=True, new_api=True, supported_reasoning=_GPT5_REASONING),
-        OpenAILLMModel("gpt-5.6-luna", "gpt-5.6-luna", input_cost=0.2, output_cost=1.2, cached_input_cost=0.02, thinking=True, new_api=True, supported_reasoning=_GPT5_REASONING),
+        OpenAILLMModel("gpt-5.6-sol", "gpt-5.6-sol", input_cost=4.0, output_cost=20.0, cached_input_cost=0.4, thinking=True, new_api=True, supported_reasoning=_GPT56_REASONING),
+        OpenAILLMModel(
+            "gpt-5.6-terra", "gpt-5.6-terra", input_cost=2.0, output_cost=12.0, cached_input_cost=0.2, thinking=True, new_api=True, supported_reasoning=_GPT56_REASONING
+        ),
+        OpenAILLMModel("gpt-5.6-luna", "gpt-5.6-luna", input_cost=0.2, output_cost=1.2, cached_input_cost=0.02, thinking=True, new_api=True, supported_reasoning=_GPT56_REASONING),
         # GPT-5.5
         OpenAILLMModel("gpt-5.5", "gpt-5.5-2026-04-23", input_cost=5.0, output_cost=30.0, cached_input_cost=0.5, thinking=True, new_api=True, supported_reasoning=_GPT5_REASONING),
         OpenAILLMModel("gpt-5.5-pro", "gpt-5.5-pro-2026-04-23", input_cost=30.0, output_cost=180.0, thinking=True, new_api=True, supported_reasoning=_GPT5_PRO_REASONING),

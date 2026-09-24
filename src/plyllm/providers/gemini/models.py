@@ -10,8 +10,6 @@ from plybench.llm.rate_limit import ModelLimits
 _GEMINI_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})
 # Gemini 3 Flash / 3.5 / 3.6 models that support the full thinking_level set
 _GEMINI3_FULL: frozenset[ReasoningEffort] = frozenset({"minimal", "low", "medium", "high"})
-# gemini-3-pro-preview
-_GEMINI3_PRO: frozenset[ReasoningEffort] = frozenset({"low", "high"})
 
 # the embed endpoint publishes no batch cap, so keep requests small enough to stay well inside the
 # per-request token limit and to bound the damage when one batch fails
@@ -122,8 +120,16 @@ def gemini_models() -> list[GeminiLLMModel]:
             uses_thinking_level=True,
             supported_reasoning=_GEMINI_REASONING,
         ),
+        # 3.8 / 3.7 / 3.6 Flash are priced at 0.75 / 3.75 through 2026-12-31, then 1.5 / 7.5
         GeminiLLMModel(
-            "gemini-3.6-flash", "gemini-3.6-flash", input_cost=1.5, output_cost=7.5, thinking=True, thinking_only=True, uses_thinking_level=True, supported_reasoning=_GEMINI3_FULL
+            "gemini-3.6-flash",
+            "gemini-3.6-flash",
+            input_cost=0.75,
+            output_cost=3.75,
+            thinking=True,
+            thinking_only=True,
+            uses_thinking_level=True,
+            supported_reasoning=_GEMINI3_FULL,
         ),
         GeminiLLMModel(
             "gemini-3.5-flash", "gemini-3.5-flash", input_cost=1.5, output_cost=9.0, thinking=True, thinking_only=True, uses_thinking_level=True, supported_reasoning=_GEMINI3_FULL
@@ -158,6 +164,7 @@ def gemini_models() -> list[GeminiLLMModel]:
             uses_thinking_level=True,
             supported_reasoning=_GEMINI3_FULL,
         ),
+        # deprecated by Google in favour of gemini-3.6-flash; still served, no shutdown date announced
         GeminiLLMModel(
             "gemini-3-flash",
             "gemini-3-flash-preview",
@@ -167,9 +174,6 @@ def gemini_models() -> list[GeminiLLMModel]:
             thinking_only=True,
             uses_thinking_level=True,
             supported_reasoning=_GEMINI3_FULL,
-        ),
-        GeminiLLMModel(
-            "gemini-3-pro", "gemini-3-pro-preview", input_cost=2.0, output_cost=12.0, thinking=True, thinking_only=True, uses_thinking_level=True, supported_reasoning=_GEMINI3_PRO
         ),
         # gemini 2.5 models (thinking_budget, not thinking_level)
         GeminiLLMModel(
