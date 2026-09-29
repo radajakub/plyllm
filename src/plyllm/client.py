@@ -8,6 +8,7 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel
 
 from plybench.llm.concurrency import ProviderSemaphore, safe_call
+from plybench.llm.errors import FailureKind, as_call_error
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
@@ -17,6 +18,9 @@ from plybench.llm.rate_limit import ModelLimits, RateGate, estimate_prompt_token
 from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
 from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
+# `safe_call` keeps this as its own default; naming it here is what lets a client lower it
+DEFAULT_RETRIES = 10
+
 T = TypeVar("T")
 ModelT = TypeVar("ModelT", bound=LLMModel)
 
@@ -24,10 +28,13 @@ ModelT = TypeVar("ModelT", bound=LLMModel)
 class LLMClient(ABC, Generic[ModelT]):
     provider_key: Provider
 
-    def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int = 10) -> None:
+    def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int = 10, retries: int = DEFAULT_RETRIES) -> None:
         self._models: dict[str, ModelT] = {model.model_name: model for model in models}
         self._embedding_models: dict[str, EmbeddingModel] = {model.model_name: model for model in embedding_models}
         self._semaphore = ProviderSemaphore(concurrency)
+        # the SDKs retry inside each of these, so the two counts multiply: a provider that stalls needs a
+        # lower number here rather than a longer timeout there
+        self._retries = retries
         # the provider semaphore is the aggregate ceiling; gates shape each model within it
         self._gates: dict[str, RateGate] = {name: make_gate(model.limits) for name, model in self._models.items()}
         # embedding endpoints carry their own quotas, so they get gates independent of the chat models
@@ -104,7 +111,12 @@ class LLMClient(ABC, Generic[ModelT]):
     ) -> T:
         estimate = self._token_estimate(model, system, messages, options)
         gate = self.gate(model)
-        return await self._semaphore.run(lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=retry_if))
+        try:
+            return await self._semaphore.run(lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=retry_if, retries=self._retries))
+        except Exception as error:
+            # classified here, where the SDK's own types are in scope. Callers get a kind without
+            # importing six SDKs, and `__cause__` still carries the original for anything that wants it
+            raise as_call_error(error, self.error_kind(error)) from error
 
     async def _dispatch_embedding(
         self,
@@ -117,10 +129,19 @@ class LLMClient(ABC, Generic[ModelT]):
         # embeddings have no output side, so the reservation is the input estimate alone
         estimate = estimate_prompt_tokens(*texts)
         gate = self.embedding_gate(model)
-        return await self._semaphore.run(lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=self._should_retry_on_error))
+        try:
+            return await self._semaphore.run(
+                lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=self._should_retry_on_error, retries=self._retries)
+            )
+        except Exception as error:
+            raise as_call_error(error, self.error_kind(error)) from error
 
     @abstractmethod
     def _should_retry_on_error(self, error: Exception) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def error_kind(self, error: Exception) -> FailureKind:
         raise NotImplementedError
 
     @abstractmethod

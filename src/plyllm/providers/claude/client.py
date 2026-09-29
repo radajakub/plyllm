@@ -7,6 +7,7 @@ from anthropic.types import Message, MessageParam, OutputTokensDetails, ParsedMe
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
+from plybench.llm.errors import FailureKind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage, MessageRole
 from plybench.llm.model import EmbeddingModel, EmbeddingTask
@@ -65,6 +66,15 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
 
     def _should_retry_on_error(self, error: Exception) -> bool:
         return isinstance(error, _RETRY_ERRORS)
+
+    def error_kind(self, error: Exception) -> FailureKind:
+        if isinstance(error, APITimeoutError):
+            return FailureKind.TIMEOUT  # before APIConnectionError, which it subclasses
+        if isinstance(error, RateLimitError):
+            return FailureKind.RATE_LIMIT
+        if isinstance(error, APIConnectionError):
+            return FailureKind.CONNECTION
+        return FailureKind.PROVIDER if isinstance(error, APIError) else FailureKind.OTHER
 
     async def _final_message(self, kwargs: dict[str, Any]) -> tuple[ParsedMessage[Any], OutputTokensDetails | None]:
         # streaming keeps long thinking traces from tripping the request timeout

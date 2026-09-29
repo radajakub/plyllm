@@ -42,6 +42,9 @@ class MistralProviderConfig:
 class MetacentrumProviderConfig:
     api_key: str
     base_url: str
+    timeout: float = 1200.0
+    max_retries: int = 0
+    retries: int = 3
 
 
 @dataclass(frozen=True)
@@ -103,7 +106,13 @@ class LLMConfig:
         meta_key = get("METACENTRUM_API_KEY") or get("OS_API_KEY")
         meta_url = get("METACENTRUM_BASE_URL") or get("OS_BASE_URL")
         if meta_key is not None and meta_url is not None:
-            metacentrum = MetacentrumProviderConfig(api_key=meta_key, base_url=meta_url)
+            metacentrum = MetacentrumProviderConfig(
+                api_key=meta_key,
+                base_url=meta_url,
+                timeout=float(get("METACENTRUM_TIMEOUT") or 1200.0),
+                max_retries=int(get("METACENTRUM_MAX_RETRIES") or 0),
+                retries=int(get("METACENTRUM_RETRIES") or 3),
+            )
 
         huggingface = None
         if huggingface_models:
