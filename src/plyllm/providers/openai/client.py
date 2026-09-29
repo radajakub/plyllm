@@ -6,6 +6,7 @@ from openai import APIConnectionError, APIError, APITimeoutError, AsyncOpenAI, R
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
+from plybench.llm.errors import FailureKind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel
@@ -79,6 +80,15 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel]):
 
     def _should_retry_on_error(self, error: Exception) -> bool:
         return isinstance(error, _RETRY_ERRORS)
+
+    def error_kind(self, error: Exception) -> FailureKind:
+        if isinstance(error, APITimeoutError):
+            return FailureKind.TIMEOUT  # before APIConnectionError, which it subclasses
+        if isinstance(error, RateLimitError):
+            return FailureKind.RATE_LIMIT
+        if isinstance(error, APIConnectionError):
+            return FailureKind.CONNECTION
+        return FailureKind.PROVIDER if isinstance(error, APIError) else FailureKind.OTHER
 
     async def generate(
         self,

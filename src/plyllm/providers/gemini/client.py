@@ -6,6 +6,7 @@ from google.genai.types import Content, ContentUnion, EmbedContentConfig, EmbedC
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
+from plybench.llm.errors import FailureKind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel
@@ -77,6 +78,17 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
         code = getattr(error, "code", None)
         # a missing code means the request never reached the API, which is worth another attempt
         return code is None or code in _RETRYABLE_STATUS
+
+    def error_kind(self, error: Exception) -> FailureKind:
+        # google-genai funnels everything into APIError, so the status code is the only discriminator
+        if not isinstance(error, _RETRY_ERRORS):
+            return FailureKind.TIMEOUT if isinstance(error, TimeoutError) else FailureKind.OTHER
+        code = getattr(error, "code", None)
+        if code is None:
+            return FailureKind.CONNECTION  # never reached the API
+        if code == 429:
+            return FailureKind.RATE_LIMIT
+        return FailureKind.TIMEOUT if code == 408 else FailureKind.PROVIDER
 
     async def generate(
         self,

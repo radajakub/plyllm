@@ -18,6 +18,7 @@ from plybench.llm import (
     Provider,
 )
 from plybench.llm.client import LLMClient
+from plybench.llm.errors import FailureKind
 from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
 from plybench.llm.response import EmbeddingBatch, OutputText
 from plybench.llm.tokens import EmbeddingTokens
@@ -54,6 +55,9 @@ class _StubClient(LLMClient):
 
     def _should_retry_on_error(self, error: Exception) -> bool:
         return False
+
+    def error_kind(self, error: Exception) -> FailureKind:
+        return FailureKind.OTHER
 
     async def generate(self, model_name, system, messages, options, output_schema=None) -> LLMResponse:
         model = self.resolve_model(model_name)

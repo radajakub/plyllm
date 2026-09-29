@@ -10,6 +10,7 @@ from mistralai.extra import response_format_from_pydantic_model
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
+from plybench.llm.errors import FailureKind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel, EmbeddingTask
@@ -90,6 +91,17 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
 
     def _should_retry_on_error(self, error: Exception) -> bool:
         return isinstance(error, _RETRY_ERRORS) and _is_retryable(error)
+
+    def error_kind(self, error: Exception) -> FailureKind:
+        if isinstance(error, httpx.TimeoutException):
+            return FailureKind.TIMEOUT  # before TransportError, which it subclasses
+        if isinstance(error, httpx.TransportError):
+            return FailureKind.CONNECTION
+        if not isinstance(error, MistralError):
+            return FailureKind.OTHER
+        if error.status_code == 429:
+            return FailureKind.RATE_LIMIT
+        return FailureKind.TIMEOUT if error.status_code == 408 else FailureKind.PROVIDER
 
     async def generate(
         self,

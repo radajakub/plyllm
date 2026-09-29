@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
+from plybench.llm.errors import FailureKind
 from plybench.llm.llm_config import HuggingFaceProviderConfig, LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel
@@ -67,6 +68,11 @@ class HuggingFaceLLMClient(LLMClient):
 
     def _should_retry_on_error(self, error: Exception) -> bool:
         return False
+
+    def error_kind(self, error: Exception) -> FailureKind:
+        # models run in this process, so there is no transport to fail: whatever went wrong is the model
+        # or the input, and no kind here would be more informative than the exception itself
+        return FailureKind.OTHER
 
     def _resolve_device(self, torch: ModuleType) -> torch.device:
         if self._device_override is not None:
