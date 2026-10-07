@@ -1,6 +1,6 @@
 # Provider documentation sources
 
-Where the model data in `src/plybench/llm/providers/*/models.py` comes from. Verified 2026-09-24.
+Where the model data in `src/plybench/llm/providers/*/models.py` comes from. Verified 2026-10-07.
 
 Fetch the pricing page and the per-model pages in parallel; the pricing pages carry every model's
 rates in one table, and the per-model pages are the only place that lists a model's exact set of
@@ -22,7 +22,10 @@ which levels a model accepts — prefer the intersection, because an unsupported
 Repository notes: `cached_input_cost` is the cache-read rate, normally 0.1x input but 0.025x on
 Fable 5.1 and 0.05x on Opus 5.5. "Adaptive (always on)" in the docs maps to `thinking_only=True`.
 Models whose docs say thinking cannot be disabled at any effort are `thinking_only`; Opus 5 can only
-disable it at `high` or below, which `_THINKING_ONLY_EFFORTS` already encodes.
+disable it at `high` or below, which `_THINKING_ONLY_EFFORTS` already encodes. Sonnet 5.5 rejects
+`"disabled"` and only offers `thinking: {"type": "between_tools"}` (effort `high` or below), which the
+harness does not model, so it is `thinking_only`. The per-model thinking table ("Rejected with 400")
+is at <https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting>.
 
 ## OpenAI (`openai`)
 
@@ -35,8 +38,9 @@ disable it at `high` or below, which `_THINKING_ONLY_EFFORTS` already encodes.
 
 Repository notes: the per-model pages list `none` as an effort value; the harness expresses that as
 `thinking_enabled=False`, so `none` is never in a `supported_reasoning` set. Effort sets differ
-within a generation — GPT-6 and GPT-5.6 accept `max`, GPT-5.5 and GPT-5.4 stop at `xhigh`, and the
-Pro variants start at `medium`.
+within a generation — GPT-6.x and GPT-5.6 accept `max`, GPT-5.5 and GPT-5.4 stop at `xhigh`, and the
+Pro variants start at `medium`. Cached input is not always 0.1x: gpt-6.1-sol is 0.05x.
+Shutdown dates: <https://developers.openai.com/api/docs/deprecations>.
 
 ## Google Gemini (`gemini`)
 
@@ -64,11 +68,15 @@ Reasoning cannot be disabled on any current Grok model.
 
 ## Mistral (`mistral`)
 
-- API pricing per model: <https://mistral.ai/pricing/api>
+- API pricing per model: <https://docs.mistral.ai/inference/pricing> (`mistral.ai/pricing/api` 301-redirects here)
+- One model's page, with its API id: `https://docs.mistral.ai/models/<slug>` (e.g. `mistral-large-4-0`)
 - Model list, dated ids, deprecations: <https://docs.mistral.ai/getting-started/models/models_overview/>
 - Reasoning capability: <https://docs.mistral.ai/capabilities/reasoning/>
 
-Repository notes: the reasoning docs only document `high` and `none`. The accepted set comes from
+Repository notes: docs slugs are not API ids — the model page shows the id next to the parameter
+count (`mistral-large-2512 +1` for Large 3, `mistral-large-4 +1` for Large 4). The reasoning page
+lists which models take `reasoning_effort` (Small, Medium 3.5, Large 4, hosted GLM 5.3), but only
+documents `high` and `none`. The accepted set comes from
 the installed SDK enum instead — read it directly:
 
 ```
@@ -77,8 +85,11 @@ cat .venv/lib/python3.13/site-packages/mistralai/client/models/reasoningeffort.p
 
 It currently reads `none, minimal, low, medium, high, xhigh`; `_MISTRAL_REASONING` is that set minus
 `none`. Cached input is documented only as "up to -90% on input tokens", so `cached_input_cost` is
-0.1x input. Mistral also sells Large 3, Ministral 3 and hosted GLM models; they are deliberately not
-in the repository because their reasoning support is undocumented.
+0.1x input. Large 4 is on an undated sale; the repository records the sale price
+with the list price in a comment. Large 3 and Ministral 3 are deliberately not in the repository
+because their reasoning support is undocumented. Hosted GLM 5.3 (`zai-glm-5-3`) documents only
+`low`/`high`/`max` and rejects `none`, which the provider sends when thinking is off; it is left out
+until the provider can express that.
 
 ## Metacentrum / e-INFRA (`metacentrum`)
 
@@ -87,7 +98,10 @@ in the repository because their reasoning support is undocumented.
 
 Repository notes: self-hosted and free, so every model carries `input_cost=0` / `output_cost=0`.
 The service replaces models without notice and the page has a separate "Obsolete Models" table —
-check it, not just the main table. Models it drops are **kept** in `models.py` under a
+check it, not just the main table. The page can lag the live endpoint (on 2026-10-07 it still read
+"Effective June 30, 2026" and listed `deepseek-v4-flash`, while `/v1/models` served
+`deepseek-v4.1-flash` from 2026-09-28). Prefer `GET https://llm.ai.e-infra.cz/v1/models` (free,
+needs `OS_API_KEY`) and ask before calling it. Models it drops are **kept** in `models.py` under a
 "no longer served" comment so existing experiment configs and recorded results still resolve
 (`resolve_model` raises on an unknown name). Reasoning-effort support is not documented per model,
 so leave `supported_reasoning=None` unless a model is known to accept it. The stable aliases

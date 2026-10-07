@@ -154,6 +154,7 @@ def gemini_models() -> list[GeminiLLMModel]:
             uses_thinking_level=True,
             supported_reasoning=_GEMINI_REASONING,
         ),
+        # deprecated by Google; shuts down 2027-05-07 (replacement: gemini-3.5-flash-lite)
         GeminiLLMModel(
             "gemini-3.1-flash-lite",
             "gemini-3.1-flash-lite",
