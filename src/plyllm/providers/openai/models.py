@@ -65,6 +65,8 @@ def openai_models() -> list[OpenAILLMModel]:
         OpenAILLMModel("gpt-6-astra", "gpt-6-astra", input_cost=10.0, output_cost=50.0, cached_input_cost=1.0, thinking=True, new_api=True, supported_reasoning=_GPT6_REASONING),
         OpenAILLMModel("gpt-6-sol", "gpt-6-sol", input_cost=2.0, output_cost=10.0, cached_input_cost=0.2, thinking=True, new_api=True, supported_reasoning=_GPT6_REASONING),
         OpenAILLMModel("gpt-6-luna", "gpt-6-luna", input_cost=0.1, output_cost=0.5, cached_input_cost=0.01, thinking=True, new_api=True, supported_reasoning=_GPT6_REASONING),
+        # GPT-6.1
+        OpenAILLMModel("gpt-6.1-sol", "gpt-6.1-sol", input_cost=2.0, output_cost=10.0, cached_input_cost=0.1, thinking=True, new_api=True, supported_reasoning=_GPT6_REASONING),
         # GPT-5.6
         OpenAILLMModel("gpt-5.6-sol", "gpt-5.6-sol", input_cost=4.0, output_cost=20.0, cached_input_cost=0.4, thinking=True, new_api=True, supported_reasoning=_GPT56_REASONING),
         OpenAILLMModel(
@@ -79,11 +81,12 @@ def openai_models() -> list[OpenAILLMModel]:
         OpenAILLMModel(
             "gpt-5.4-mini", "gpt-5.4-mini-2026-03-17", input_cost=0.75, output_cost=4.5, cached_input_cost=0.075, thinking=True, new_api=True, supported_reasoning=_GPT5_REASONING
         ),
+        # deprecated by OpenAI; shuts down 2027-04-01 (replacement: gpt-6-luna)
         OpenAILLMModel(
             "gpt-5.4-nano", "gpt-5.4-nano-2026-03-17", input_cost=0.2, output_cost=1.25, cached_input_cost=0.02, thinking=True, new_api=True, supported_reasoning=_GPT5_REASONING
         ),
         OpenAILLMModel("gpt-5.4-pro", "gpt-5.4-pro-2026-03-05", input_cost=30.0, output_cost=180.0, thinking=True, new_api=True, supported_reasoning=_GPT5_PRO_REASONING),
-        # GPT-5 (legacy, kept for backward compatibility)
+        # GPT-5 (legacy, kept for backward compatibility; OpenAI shuts both down on 2026-12-11)
         OpenAILLMModel(
             "gpt-5-mini",
             "gpt-5-mini-2025-08-07",

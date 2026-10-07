@@ -7,7 +7,7 @@ from anthropic.types import ThinkingConfigParam
 from plybench.llm.model import LLMModel
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
-# Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Opus 4.8 / Sonnet 5 accept the whole effort ladder
+# Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Opus 4.8 / Sonnet 5.5 / Sonnet 5 accept the whole effort ladder
 _EFFORT_FULL: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh", "max"})
 # Sonnet 4.6 predates the xhigh level
 _EFFORT_NO_XHIGH: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "max"})
@@ -129,6 +129,17 @@ def claude_models() -> list[ClaudeLLMModel]:
         # Claude Opus 5 (thinking is adaptive by default)
         ClaudeLLMModel("claude-opus-5", "claude-opus-5", input_cost=5.0, output_cost=25.0, cached_input_cost=0.5, thinking=True, supported_reasoning=_EFFORT_FULL),
         ClaudeLLMModel("claude-opus-4.8", "claude-opus-4-8", input_cost=5.0, output_cost=25.0, cached_input_cost=0.5, thinking=True, supported_reasoning=_EFFORT_FULL),
+        # Claude Sonnet 5.5 (rejects thinking "disabled"; its "between_tools" mode is not modelled here)
+        ClaudeLLMModel(
+            "claude-sonnet-5.5",
+            "claude-sonnet-5-5",
+            input_cost=2.0,
+            output_cost=10.0,
+            cached_input_cost=0.2,
+            thinking=True,
+            thinking_only=True,
+            supported_reasoning=_EFFORT_FULL,
+        ),
         # Claude Sonnet 5
         ClaudeLLMModel("claude-sonnet-5", "claude-sonnet-5", input_cost=2.0, output_cost=10.0, cached_input_cost=0.2, thinking=True, supported_reasoning=_EFFORT_FULL),
         ClaudeLLMModel(
