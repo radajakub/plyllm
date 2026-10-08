@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import httpx
 from google import genai
 from google.genai.errors import APIError
-from google.genai.types import Content, ContentUnion, EmbedContentConfig, EmbedContentResponse, GenerateContentResponse, Part
+from google.genai.types import Content, ContentUnion, EmbedContentConfig, EmbedContentResponse, GenerateContentResponse, HttpOptions, Part
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind
+from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel
@@ -14,13 +15,12 @@ from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.gemini.models import GeminiLLMModel, gemini_embedding_models, gemini_models
 from plybench.llm.providers.providers import Provider
 from plybench.llm.rate_limit import estimate_prompt_tokens
-from plybench.llm.response import EmbeddingBatch, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.response import EmbeddingBatch, LLMResponse
 from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
-_RETRY_ERRORS = (APIError,)
-# every genai failure surfaces as an APIError, so only throttling and server-side faults are worth
-# another attempt; a 400 (oversized input, bad request) would just burn the whole retry budget
-_RETRYABLE_STATUS = frozenset({408, 409, 429, 500, 502, 503, 504})
+# genai turns HTTP responses into APIError but lets transport failures through untouched. The client is
+# pinned to httpx (see build), so httpx's types are the only transport failures it can raise.
+_RETRY_ERRORS = (APIError, httpx.TransportError)
 _ROLE_MAP = {"user": "user", "assistant": "model", "system": "user"}
 
 
@@ -69,26 +69,31 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
     def build(cls, config: LLMConfig) -> GeminiLLMClient | None:
         if config.gemini is None:
             return None
-        client = genai.Client(api_key=config.gemini.api_key).aio
+        # genai switches to aiohttp whenever it is installed (the Claude extra pulls it in); passing an httpx
+        # client pins the transport, so its failures do not depend on what else happens to be installed.
+        # The timeout still applies per request; HttpOptions takes milliseconds.
+        http_options = HttpOptions(timeout=int(config.gemini.timeout * 1000), httpx_async_client=httpx.AsyncClient())
+        client = genai.Client(api_key=config.gemini.api_key, http_options=http_options).aio
         return cls(client, config.default_concurrency)
 
     def _should_retry_on_error(self, error: Exception) -> bool:
-        if not isinstance(error, _RETRY_ERRORS):
+        if isinstance(error, httpx.TransportError):
+            return True  # never reached the API, or timed out on the way
+        if not isinstance(error, APIError):
             return False
         code = getattr(error, "code", None)
         # a missing code means the request never reached the API, which is worth another attempt
-        return code is None or code in _RETRYABLE_STATUS
+        return code is None or retryable_status(code)
 
     def error_kind(self, error: Exception) -> FailureKind:
-        # google-genai funnels everything into APIError, so the status code is the only discriminator
-        if not isinstance(error, _RETRY_ERRORS):
-            return FailureKind.TIMEOUT if isinstance(error, TimeoutError) else FailureKind.OTHER
+        if isinstance(error, httpx.TimeoutException):
+            return FailureKind.TIMEOUT  # before TransportError, which it subclasses
+        if isinstance(error, httpx.TransportError):
+            return FailureKind.CONNECTION
+        if not isinstance(error, APIError):
+            return FailureKind.OTHER
         code = getattr(error, "code", None)
-        if code is None:
-            return FailureKind.CONNECTION  # never reached the API
-        if code == 429:
-            return FailureKind.RATE_LIMIT
-        return FailureKind.TIMEOUT if code == 408 else FailureKind.PROVIDER
+        return FailureKind.CONNECTION if code is None else status_kind(code)
 
     async def generate(
         self,
@@ -115,7 +120,6 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
             options,
             lambda: self._client.models.generate_content(model=model.model_string, contents=contents, config=params),
             _RETRY_ERRORS,
-            retry_if=self._should_retry_on_error,
             tokens_of=_total_tokens,
         )
 
@@ -135,12 +139,7 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
         reasoning = _extract_reasoning(response)
         output_text = response.text or ""
 
-        items: list[ReasoningTrace | OutputText] = []
-        if reasoning:
-            items.append(ReasoningTrace(reasoning))
-        items.append(OutputText([output_text]))
-
-        return LLMResponse(self.provider_key, model.model_string, tokens, items, output_text, output_schema)
+        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
 
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         # one Content per text: passing bare parts would return a single aggregated vector instead

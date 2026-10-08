@@ -106,13 +106,15 @@ class LLMClient(ABC, Generic[ModelT]):
         options: LLMCallOptions,
         task: Callable[[], Awaitable[T]],
         retry_errors: tuple[type[Exception], ...],
-        retry_if: Callable[[Exception], bool] | None = None,
         tokens_of: Callable[[T], int] | None = None,
     ) -> T:
         estimate = self._token_estimate(model, system, messages, options)
         gate = self.gate(model)
         try:
-            return await self._semaphore.run(lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=retry_if, retries=self._retries))
+            # generation and embeddings share one retry rule per provider: `_should_retry_on_error`
+            return await self._semaphore.run(
+                lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=self._should_retry_on_error, retries=self._retries)
+            )
         except Exception as error:
             # classified here, where the SDK's own types are in scope. Callers get a kind without
             # importing six SDKs, and `__cause__` still carries the original for anything that wants it

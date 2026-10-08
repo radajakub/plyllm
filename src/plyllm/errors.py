@@ -34,6 +34,24 @@ class LLMTimedOut(LLMCallError):
         super().__init__(FailureKind.TIMEOUT, message)
 
 
+# one retry rule for every provider: throttling, conflicts, request timeouts and any server-side fault
+# (Anthropic signals overload with 529). Other 4xx statuses are the request's fault and fail at once,
+# instead of burning the whole retry budget on a call that cannot succeed
+_RETRYABLE_STATUSES = frozenset({408, 409, 429})
+
+
+def retryable_status(status: int | None) -> bool:
+    return status is not None and (status in _RETRYABLE_STATUSES or status >= 500)
+
+
+def status_kind(status: int | None) -> FailureKind:
+    if status == 429:
+        return FailureKind.RATE_LIMIT
+    if status == 408:
+        return FailureKind.TIMEOUT
+    return FailureKind.PROVIDER
+
+
 _SUBCLASSES: dict[FailureKind, Callable[[str], LLMCallError]] = {
     FailureKind.RATE_LIMIT: LLMRateLimited,
     FailureKind.TIMEOUT: LLMTimedOut,

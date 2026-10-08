@@ -37,6 +37,23 @@ class LLMResponse:
     # the pydantic schema the output_text conforms to, when structured output was requested
     structured_output_type: type[BaseModel] | None = None
 
+    @classmethod
+    def from_parts(
+        cls,
+        provider: Provider,
+        model_string: str,
+        output_text: str,
+        reasoning: list[str],
+        tokens: LLMTokens,
+        output_schema: type[BaseModel] | None,
+    ) -> LLMResponse:
+        # reasoning first, then the answer: the order the providers return them in
+        items: list[LLMResponseItem] = []
+        if reasoning:
+            items.append(ReasoningTrace(reasoning))
+        items.append(OutputText([output_text]))
+        return cls(provider, model_string, tokens, items, output_text, output_schema)
+
     @property
     def reasoning(self) -> list[str]:
         return [summary for item in self.items if isinstance(item, ReasoningTrace) for summary in item.summaries]

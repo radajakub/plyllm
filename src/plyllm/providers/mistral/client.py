@@ -10,27 +10,24 @@ from mistralai.extra import response_format_from_pydantic_model
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind
+from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.mistral.models import MistralLLMModel, mistral_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
 from plybench.llm.tokens import LLMTokens
 
 # MistralError covers every HTTP failure, so the status predicate below decides what is worth
 # retrying; NoResponseError and httpx failures are transport-level and always are
 _RETRY_ERRORS = (MistralError, httpx.TimeoutException, httpx.TransportError)
-_RETRY_STATUSES = frozenset({408, 409, 429, 500, 502, 503, 504})
-# the SDK defaults to 300s per request, which a long thinking trace can exceed
-_TIMEOUT_MS = 600_000
 
 
 def _is_retryable(error: Exception) -> bool:
     if isinstance(error, MistralError):
-        return error.status_code in _RETRY_STATUSES
+        return retryable_status(error.status_code)
     return True
 
 
@@ -86,7 +83,8 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
     def build(cls, config: LLMConfig) -> MistralLLMClient | None:
         if config.mistral is None:
             return None
-        client = Mistral(api_key=config.mistral.api_key, timeout_ms=_TIMEOUT_MS)
+        # the SDK defaults to 300s per request, which a long thinking trace can exceed
+        client = Mistral(api_key=config.mistral.api_key, timeout_ms=int(config.mistral.timeout * 1000))
         return cls(client, config.default_concurrency)
 
     def _should_retry_on_error(self, error: Exception) -> bool:
@@ -99,9 +97,7 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
             return FailureKind.CONNECTION
         if not isinstance(error, MistralError):
             return FailureKind.OTHER
-        if error.status_code == 429:
-            return FailureKind.RATE_LIMIT
-        return FailureKind.TIMEOUT if error.status_code == 408 else FailureKind.PROVIDER
+        return status_kind(error.status_code)
 
     async def generate(
         self,
@@ -132,7 +128,6 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
             options,
             lambda: self._client.chat.complete_async(**kwargs),
             _RETRY_ERRORS,
-            retry_if=_is_retryable,
             tokens_of=total_tokens,
         )
 
@@ -141,12 +136,7 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
         if output_schema is not None:
             output_text = output_schema.model_validate_json(output_text).model_dump_json()
 
-        items: list[ReasoningTrace | OutputText] = []
-        if reasoning:
-            items.append(ReasoningTrace(reasoning))
-        items.append(OutputText([output_text]))
-
-        return LLMResponse(self.provider_key, model.model_string, completion_tokens(response.usage), items, output_text, output_schema)
+        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, completion_tokens(response.usage), output_schema)
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         raise NotImplementedError("Mistral embeddings are not supported in this package")
