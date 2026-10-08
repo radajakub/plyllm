@@ -2,24 +2,26 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from anthropic import APIConnectionError, APIError, APITimeoutError, AsyncAnthropic, RateLimitError
-from anthropic.types import Message, MessageParam, OutputTokensDetails, ParsedMessage, TextBlockParam, Usage
+from anthropic import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncAnthropic
+from anthropic.types import Message, MessageParam, TextBlockParam, Usage
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind
+from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage, MessageRole
 from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
 from plybench.llm.tokens import LLMTokens
 
 AnthropicRoles = Literal["user", "assistant", "system"]
 
-_RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
+# APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
+# cover every failure the SDK raises for a request that was sent
+_RETRY_ERRORS = (APIConnectionError, APIStatusError)
 # the messages array only carries the conversation; the system prompt is a separate request field
 _ROLE_MAP: dict[MessageRole, AnthropicRoles] = {"user": "user", "assistant": "assistant", "system": "user"}
 
@@ -32,13 +34,13 @@ def _output_text(message: Message) -> str:
     return "".join(block.text for block in message.content if block.type == "text")
 
 
-def _total_tokens(result: tuple[ParsedMessage[Any], OutputTokensDetails | None]) -> int:
+def _total_tokens(message: Message) -> int:
     # what the rate gate charges against a tokens_per_minute quota
-    usage = result[0].usage
+    usage = message.usage
     return usage.input_tokens + (usage.cache_read_input_tokens or 0) + (usage.cache_creation_input_tokens or 0) + usage.output_tokens
 
 
-def message_tokens(usage: Usage, output_details: OutputTokensDetails | None) -> LLMTokens:
+def message_tokens(usage: Usage) -> LLMTokens:
     # usage.input_tokens counts only the uncached prefix; cache reads and writes are reported separately
     cached_tokens = usage.cache_read_input_tokens or 0
     cache_write_tokens = usage.cache_creation_input_tokens or 0
@@ -46,7 +48,7 @@ def message_tokens(usage: Usage, output_details: OutputTokensDetails | None) -> 
         input_tokens=usage.input_tokens + cached_tokens + cache_write_tokens,
         cached_input_tokens=cached_tokens,
         output_tokens=usage.output_tokens,
-        reasoning_tokens=output_details.thinking_tokens if output_details is not None else 0,
+        reasoning_tokens=usage.output_tokens_details.thinking_tokens if usage.output_tokens_details is not None else 0,
     )
 
 
@@ -61,30 +63,23 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
     def build(cls, config: LLMConfig) -> ClaudeLLMClient | None:
         if config.claude is None:
             return None
-        client = AsyncAnthropic(api_key=config.claude.api_key, timeout=None)
+        client = AsyncAnthropic(api_key=config.claude.api_key, timeout=config.claude.timeout)
         return cls(client, config.default_concurrency)
 
     def _should_retry_on_error(self, error: Exception) -> bool:
-        return isinstance(error, _RETRY_ERRORS)
+        if isinstance(error, APIConnectionError):
+            return True  # never reached the API, or timed out on the way
+        return isinstance(error, APIStatusError) and retryable_status(error.status_code)
 
     def error_kind(self, error: Exception) -> FailureKind:
         if isinstance(error, APITimeoutError):
             return FailureKind.TIMEOUT  # before APIConnectionError, which it subclasses
-        if isinstance(error, RateLimitError):
-            return FailureKind.RATE_LIMIT
         if isinstance(error, APIConnectionError):
             return FailureKind.CONNECTION
+        if isinstance(error, APIStatusError):
+            return status_kind(error.status_code)
+        # e.g. APIResponseValidationError: the API answered, with something the SDK could not read
         return FailureKind.PROVIDER if isinstance(error, APIError) else FailureKind.OTHER
-
-    async def _final_message(self, kwargs: dict[str, Any]) -> tuple[ParsedMessage[Any], OutputTokensDetails | None]:
-        # streaming keeps long thinking traces from tripping the request timeout
-        async with self._client.messages.stream(**kwargs) as stream:
-            output_details: OutputTokensDetails | None = None
-            async for event in stream:
-                # the accumulated message drops output_tokens_details, so keep the streamed value
-                if event.type == "message_delta":
-                    output_details = event.usage.output_tokens_details or output_details
-            return await stream.get_final_message(), output_details
 
     async def generate(
         self,
@@ -107,7 +102,9 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
         if output_schema is not None:
             kwargs["output_format"] = output_schema
 
-        response, output_details = await self._dispatch(model, system, messages, options, lambda: self._final_message(kwargs), _RETRY_ERRORS, tokens_of=_total_tokens)
+        # one request like the other providers; parse() with no output_format returns the plain message. Not
+        # streamed, so the client timeout caps the whole answer: raise CLAUDE_TIMEOUT for long max-effort runs
+        response = await self._dispatch(model, system, messages, options, lambda: self._client.messages.parse(**kwargs), _RETRY_ERRORS, tokens_of=_total_tokens)
 
         if response.stop_reason == "refusal":
             details = response.stop_details
@@ -116,15 +113,10 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
 
         parsed_output: BaseModel | None = response.parsed_output if output_schema is not None else None
         output_text = parsed_output.model_dump_json() if parsed_output is not None else _output_text(response)
-        tokens = message_tokens(response.usage, output_details)
+        tokens = message_tokens(response.usage)
         reasoning = _thinking_summaries(response)
 
-        items: list[ReasoningTrace | OutputText] = []
-        if reasoning:
-            items.append(ReasoningTrace(reasoning))
-        items.append(OutputText([output_text]))
-
-        return LLMResponse(self.provider_key, model.model_string, tokens, items, output_text, output_schema)
+        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         raise NotImplementedError("Claude embeddings are not supported in this package")

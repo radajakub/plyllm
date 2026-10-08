@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from openai import APIConnectionError, APIError, APITimeoutError, AsyncOpenAI, RateLimitError
+from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncOpenAI
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind
+from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.openai.models import OpenAILLMModel, openai_embedding_models, openai_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingBatch, LLMResponse, OutputText, ReasoningTrace
+from plybench.llm.response import EmbeddingBatch, LLMResponse
 from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 
-_RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
+# APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
+# cover every failure the SDK raises for a request that was sent
+_RETRY_ERRORS = (APIConnectionError, APIStatusError)
 
 
 def _reasoning_summaries(response: Any) -> list[str]:
@@ -44,21 +46,6 @@ def responses_tokens(usage: Any) -> LLMTokens:
     )
 
 
-def build_response(
-    provider: Provider,
-    model_string: str,
-    output_text: str,
-    reasoning: list[str],
-    tokens: LLMTokens,
-    output_schema: type[BaseModel] | None,
-) -> LLMResponse:
-    items: list[Any] = []
-    if reasoning:
-        items.append(ReasoningTrace(reasoning))
-    items.append(OutputText([output_text]))
-    return LLMResponse(provider, model_string, tokens, items, output_text, output_schema)
-
-
 class OpenAILLMClient(LLMClient[OpenAILLMModel]):
     provider_key = Provider.OPENAI
 
@@ -74,20 +61,23 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel]):
             api_key=config.openai.api_key,
             organization=config.openai.organization,
             project=config.openai.project,
-            timeout=None,
+            timeout=config.openai.timeout,
         )
         return cls(client, config.default_concurrency)
 
     def _should_retry_on_error(self, error: Exception) -> bool:
-        return isinstance(error, _RETRY_ERRORS)
+        if isinstance(error, APIConnectionError):
+            return True  # never reached the API, or timed out on the way
+        return isinstance(error, APIStatusError) and retryable_status(error.status_code)
 
     def error_kind(self, error: Exception) -> FailureKind:
         if isinstance(error, APITimeoutError):
             return FailureKind.TIMEOUT  # before APIConnectionError, which it subclasses
-        if isinstance(error, RateLimitError):
-            return FailureKind.RATE_LIMIT
         if isinstance(error, APIConnectionError):
             return FailureKind.CONNECTION
+        if isinstance(error, APIStatusError):
+            return status_kind(error.status_code)
+        # e.g. APIResponseValidationError: the API answered, with something the SDK could not read
         return FailureKind.PROVIDER if isinstance(error, APIError) else FailureKind.OTHER
 
     async def generate(
@@ -122,7 +112,7 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel]):
         output_text = response.output_parsed.model_dump_json() if output_schema is not None and response.output_parsed is not None else response.output_text
         tokens = responses_tokens(response.usage)
 
-        return build_response(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
+        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
 
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         response = await self._dispatch_embedding(

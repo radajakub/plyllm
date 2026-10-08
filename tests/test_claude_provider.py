@@ -1,10 +1,13 @@
 import asyncio
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
-from anthropic.types import OutputTokensDetails, Usage
+from anthropic import AsyncAnthropic
+from anthropic.types import Message, OutputTokensDetails, Usage
 
-from plybench.llm import LLM, ClaudeProviderConfig, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMTokens, Provider
-from plybench.llm.providers.claude.client import message_tokens
+from plybench.llm import LLM, ClaudeProviderConfig, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMMessage, LLMTokens, Provider
+from plybench.llm.providers.claude.client import ClaudeLLMClient, message_tokens
 from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
 
 
@@ -85,9 +88,9 @@ def test_thinking_only_model_requires_thinking():
 
 
 def test_message_tokens_folds_cache_counters_into_input_tokens():
-    usage = Usage(input_tokens=100, output_tokens=500, cache_creation_input_tokens=40, cache_read_input_tokens=60)
+    usage = Usage(input_tokens=100, output_tokens=500, cache_creation_input_tokens=40, cache_read_input_tokens=60, output_tokens_details=OutputTokensDetails(thinking_tokens=300))
 
-    tokens = message_tokens(usage, OutputTokensDetails(thinking_tokens=300))
+    tokens = message_tokens(usage)
 
     assert tokens.input_tokens == 200
     assert tokens.cached_input_tokens == 60
@@ -96,15 +99,15 @@ def test_message_tokens_folds_cache_counters_into_input_tokens():
 
 
 def test_message_tokens_without_output_details():
-    tokens = message_tokens(Usage(input_tokens=10, output_tokens=20), None)
+    tokens = message_tokens(Usage(input_tokens=10, output_tokens=20))
 
     assert tokens == LLMTokens(input_tokens=10, cached_input_tokens=0, output_tokens=20, reasoning_tokens=0)
 
 
 def test_cost_charges_cached_tokens_at_the_cache_read_rate():
     model = _model("claude-sonnet-5")
-    uncached = message_tokens(Usage(input_tokens=1_000_000, output_tokens=0), None)
-    cached = message_tokens(Usage(input_tokens=0, output_tokens=0, cache_read_input_tokens=1_000_000), None)
+    uncached = message_tokens(Usage(input_tokens=1_000_000, output_tokens=0))
+    cached = message_tokens(Usage(input_tokens=0, output_tokens=0, cache_read_input_tokens=1_000_000))
 
     assert model.cost(uncached) == pytest.approx(model.input_cost)
     assert model.cost(cached) == pytest.approx(model.cached_input_cost)
@@ -115,3 +118,45 @@ def test_embed_not_supported():
 
     with pytest.raises(NotImplementedError):
         asyncio.run(llm.embed(EmbeddingModelConfig(Provider.CLAUDE, "claude-opus-5"), ["hello"], EmbeddingTask.SEARCH_QUERY))
+
+
+class _FakeMessages:
+    def __init__(self, message: Message) -> None:
+        self._message = message
+        self.kwargs: dict = {}
+
+    async def parse(self, **kwargs) -> Message:
+        self.kwargs = kwargs
+        return self._message
+
+
+def _message() -> Message:
+    return Message.model_validate(
+        {
+            "id": "msg_1",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-opus-5",
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "content": [{"type": "thinking", "thinking": "take the centre", "signature": "sig"}, {"type": "text", "text": "4"}],
+            "usage": {"input_tokens": 100, "output_tokens": 40, "cache_read_input_tokens": 60, "cache_creation_input_tokens": 0, "output_tokens_details": {"thinking_tokens": 30}},
+        }
+    )
+
+
+def test_generate_is_one_request_with_reasoning_and_thinking_tokens():
+    """Not streamed: one parse() call, like the other providers. The thinking-token count used to be read off
+    the stream events because the accumulated message dropped it; a plain response carries it in usage."""
+    messages = _FakeMessages(_message())
+    client = ClaudeLLMClient(cast(AsyncAnthropic, SimpleNamespace(messages=messages)), concurrency=1)
+
+    response = asyncio.run(
+        client.generate("claude-opus-5", LLMMessage.system("rules"), [LLMMessage.user("your move")], LLMCallOptions(thinking_enabled=True, reasoning_effort="high"))
+    )
+
+    assert "stream" not in messages.kwargs and "output_format" not in messages.kwargs
+    assert messages.kwargs["system"][0]["cache_control"] == {"type": "ephemeral"}
+    assert response.output_text == "4"
+    assert response.reasoning == ["take the centre"]
+    assert response.tokens == LLMTokens(input_tokens=160, cached_input_tokens=60, output_tokens=40, reasoning_tokens=30)

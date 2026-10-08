@@ -5,21 +5,44 @@ import re
 import warnings
 from typing import Any
 
-from openai import APIConnectionError, APIError, APITimeoutError, AsyncOpenAI, RateLimitError
+from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncOpenAI
 from pydantic import BaseModel
 
 from plybench.llm.client import DEFAULT_RETRIES, LLMClient
-from plybench.llm.errors import FailureKind
+from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
-from plybench.llm.providers.openai.client import build_response, responses_tokens, responses_total_tokens
 from plybench.llm.providers.providers import Provider
 from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
+from plybench.llm.tokens import LLMTokens
 
-_RETRY_ERRORS = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
+# APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
+# cover every failure the SDK raises for a request that was sent
+_RETRY_ERRORS = (APIConnectionError, APIStatusError)
+
+
+def responses_total_tokens(response: Any) -> int:
+    # what the rate gate charges against a tokens_per_minute quota
+    usage = response.usage
+    if usage is None:
+        return 0
+    return (usage.input_tokens or 0) + (usage.output_tokens or 0)
+
+
+def responses_tokens(usage: Any) -> LLMTokens:
+    if usage is None:
+        return LLMTokens(input_tokens=0, output_tokens=0, cached_input_tokens=0, reasoning_tokens=0)
+    input_details = getattr(usage, "input_tokens_details", None)
+    output_details = getattr(usage, "output_tokens_details", None)
+    return LLMTokens(
+        input_tokens=usage.input_tokens or 0,
+        output_tokens=usage.output_tokens or 0,
+        cached_input_tokens=getattr(input_details, "cached_tokens", 0) or 0,
+        reasoning_tokens=getattr(output_details, "reasoning_tokens", 0) or 0,
+    )
 
 
 def _extract_text_and_reasoning(response: Any) -> tuple[str, list[str]]:
@@ -85,15 +108,18 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
         return cls(client, config.default_concurrency, config.metacentrum.retries)
 
     def _should_retry_on_error(self, error: Exception) -> bool:
-        return isinstance(error, _RETRY_ERRORS)
+        if isinstance(error, APIConnectionError):
+            return True  # never reached the API, or timed out on the way
+        return isinstance(error, APIStatusError) and retryable_status(error.status_code)
 
     def error_kind(self, error: Exception) -> FailureKind:
         if isinstance(error, APITimeoutError):
             return FailureKind.TIMEOUT  # before APIConnectionError, which it subclasses
-        if isinstance(error, RateLimitError):
-            return FailureKind.RATE_LIMIT
         if isinstance(error, APIConnectionError):
             return FailureKind.CONNECTION
+        if isinstance(error, APIStatusError):
+            return status_kind(error.status_code)
+        # e.g. APIResponseValidationError: the API answered, with something the SDK could not read
         return FailureKind.PROVIDER if isinstance(error, APIError) else FailureKind.OTHER
 
     async def generate(
@@ -140,7 +166,7 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
                 output_text = _json_body(output_text)
 
         tokens = responses_tokens(response.usage)
-        return build_response(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
+        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         raise NotImplementedError("Metacentrum embeddings are not supported in this package")

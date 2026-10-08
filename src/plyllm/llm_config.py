@@ -7,6 +7,9 @@ from dotenv import dotenv_values
 
 # max in-flight requests per provider; this is the ceiling that actually protects against rate limits
 DEFAULT_CONCURRENCY = 10
+# seconds one request may take before the SDK gives up and our retry layer takes over; long enough for
+# a slow thinking trace, short enough that a stalled connection does not hang a run forever
+DEFAULT_TIMEOUT = 600.0
 
 
 @dataclass(frozen=True)
@@ -14,11 +17,13 @@ class OpenAIProviderConfig:
     api_key: str
     organization: str | None = None
     project: str | None = None
+    timeout: float = DEFAULT_TIMEOUT
 
 
 @dataclass(frozen=True)
 class GeminiProviderConfig:
     api_key: str
+    timeout: float = DEFAULT_TIMEOUT
 
 
 @dataclass(frozen=True)
@@ -26,16 +31,19 @@ class GrokProviderConfig:
     api_key: str
     # xAI ships an OpenAI-compatible endpoint; overridable via GROK_BASE_URL
     base_url: str = "https://api.x.ai/v1"
+    timeout: float = DEFAULT_TIMEOUT
 
 
 @dataclass(frozen=True)
 class ClaudeProviderConfig:
     api_key: str
+    timeout: float = DEFAULT_TIMEOUT
 
 
 @dataclass(frozen=True)
 class MistralProviderConfig:
     api_key: str
+    timeout: float = DEFAULT_TIMEOUT
 
 
 @dataclass(frozen=True)
@@ -77,30 +85,35 @@ class LLMConfig:
             value = values.get(key)
             return value or None
 
+        def timeout(prefix: str) -> float:
+            return float(get(f"{prefix}_TIMEOUT") or DEFAULT_TIMEOUT)
+
         openai = None
         if (openai_key := get("OPENAI_API_KEY")) is not None:
             openai = OpenAIProviderConfig(
                 api_key=openai_key,
                 organization=get("OPENAI_ORGANIZATION"),
                 project=get("OPENAI_PROJECT"),
+                timeout=timeout("OPENAI"),
             )
 
         gemini = None
         if (gemini_key := get("GEMINI_API_KEY")) is not None:
-            gemini = GeminiProviderConfig(api_key=gemini_key)
+            gemini = GeminiProviderConfig(api_key=gemini_key, timeout=timeout("GEMINI"))
 
         grok = None
         if (grok_key := get("GROK_API_KEY")) is not None:
             grok_url = get("GROK_BASE_URL")
-            grok = GrokProviderConfig(api_key=grok_key, base_url=grok_url) if grok_url else GrokProviderConfig(api_key=grok_key)
+            grok_timeout = timeout("GROK")
+            grok = GrokProviderConfig(api_key=grok_key, base_url=grok_url, timeout=grok_timeout) if grok_url else GrokProviderConfig(api_key=grok_key, timeout=grok_timeout)
 
         claude = None
         if (claude_key := get("CLAUDE_API_KEY")) is not None:
-            claude = ClaudeProviderConfig(api_key=claude_key)
+            claude = ClaudeProviderConfig(api_key=claude_key, timeout=timeout("CLAUDE"))
 
         mistral = None
         if (mistral_key := get("MISTRAL_API_KEY")) is not None:
-            mistral = MistralProviderConfig(api_key=mistral_key)
+            mistral = MistralProviderConfig(api_key=mistral_key, timeout=timeout("MISTRAL"))
 
         metacentrum = None
         meta_key = get("METACENTRUM_API_KEY") or get("OS_API_KEY")
