@@ -15,11 +15,10 @@ from plybench.llm.client import DEFAULT_RETRIES, LLMClient
 from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
-from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
+from plybench.llm.response import LLMResponse
 from plybench.llm.tokens import LLMTokens
 
 # APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
@@ -103,8 +102,10 @@ def silence_proxy_serializer_warnings() -> None:
 
 class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
     provider_key = Provider.METACENTRUM
+    # the shared e-INFRA endpoint answered 429 to 10 parallel calls on 2026-10-09
+    default_concurrency = 4
 
-    def __init__(self, client: AsyncOpenAI, concurrency: int = 4, retries: int = DEFAULT_RETRIES) -> None:
+    def __init__(self, client: AsyncOpenAI, concurrency: int | None = None, retries: int = DEFAULT_RETRIES) -> None:
         super().__init__(metacentrum_models(), [], concurrency, retries)
         self._client = client
 
@@ -147,9 +148,7 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
     ) -> LLMResponse:
-        model: MetacentrumLLMModel = self.resolve_model(model_name)
-        if output_schema is not None and not model.can_use_json_schema:
-            raise ValueError(f"Model {model.model_name} does not support JSON schema")
+        model: MetacentrumLLMModel = self._resolve_for_generate(model_name, output_schema)
 
         params = model.extract_params(options)
         extra_body = model.extract_extra_body(options)
@@ -182,9 +181,3 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
             raise self._refused(model, refusal, refusal, reasoning, tokens)
 
         return self._answer(model, output_text, reasoning, tokens, output_schema)
-
-    async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
-        raise NotImplementedError("Metacentrum embeddings are not supported in this package")
-
-    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
-        raise NotImplementedError("Metacentrum embeddings are not supported in this package")

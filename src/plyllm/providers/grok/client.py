@@ -12,11 +12,10 @@ from plybench.llm.client import LLMClient
 from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
-from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.grok.models import GrokLLMModel, grok_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
+from plybench.llm.response import LLMResponse
 from plybench.llm.tokens import LLMTokens
 
 # APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
@@ -58,7 +57,7 @@ def responses_tokens(usage: Any) -> LLMTokens:
 class GrokLLMClient(LLMClient[GrokLLMModel]):
     provider_key = Provider.GROK
 
-    def __init__(self, client: AsyncOpenAI, concurrency: int = 10) -> None:
+    def __init__(self, client: AsyncOpenAI, concurrency: int | None = None) -> None:
         super().__init__(grok_models(), [], concurrency)
         self._client = client
 
@@ -95,9 +94,7 @@ class GrokLLMClient(LLMClient[GrokLLMModel]):
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
     ) -> LLMResponse:
-        model: GrokLLMModel = self.resolve_model(model_name)
-        if output_schema is not None and not model.can_use_json_schema:
-            raise ValueError(f"Model {model.model_name} does not support JSON schema")
+        model: GrokLLMModel = self._resolve_for_generate(model_name, output_schema)
 
         params = model.extract_params(options)
         kwargs: dict[str, Any] = dict(
@@ -123,9 +120,3 @@ class GrokLLMClient(LLMClient[GrokLLMModel]):
             raise self._refused(model, refusal, refusal, reasoning, tokens)
 
         return self._answer(model, response.output_text, reasoning, tokens, output_schema)
-
-    async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
-        raise NotImplementedError("Grok embeddings are not supported in this package")
-
-    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
-        raise NotImplementedError("Grok embeddings are not supported in this package")

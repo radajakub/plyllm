@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from plybench.llm.model import LLMModel
@@ -8,6 +9,8 @@ from plybench.llm.options import LLMCallOptions, ReasoningEffort
 _DEFAULT_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})
 _KIMI_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "high", "max"})
 _QWEN3_8_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "xhigh"})
+_QWEN3_5_THINKING: dict[str, Any] = {"chat_template_kwargs": {"thinking": True}}
+_QWEN3_8_NO_THINKING: dict[str, Any] = {"top_k": 20, "chat_template_kwargs": {"thinking": False}}
 
 
 class MetacentrumLLMModel(LLMModel):
@@ -20,6 +23,8 @@ class MetacentrumLLMModel(LLMModel):
         weak_structured_output: bool = False,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
         retired: bool = False,
+        extra_body_thinking: dict[str, Any] | None = None,
+        extra_body_no_thinking: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             model_name,
@@ -32,6 +37,9 @@ class MetacentrumLLMModel(LLMModel):
             retired=retired,
         )
         self.new_api = new_api
+        # vLLM fields outside the Responses API (chat template switches, sampling), sent with or without thinking
+        self.extra_body_thinking = extra_body_thinking or {}
+        self.extra_body_no_thinking = extra_body_no_thinking or {}
 
     def extract_params(self, options: LLMCallOptions) -> dict[str, Any]:
         self.validate(options)
@@ -50,17 +58,9 @@ class MetacentrumLLMModel(LLMModel):
         return params
 
     def extract_extra_body(self, options: LLMCallOptions) -> dict[str, Any]:
-        match self.model_name:
-            case "qwen-3.5-122b" | "qwen-3.5":
-                if not (options.thinking_enabled and self.thinking):
-                    return {}
-                return {"chat_template_kwargs": {"thinking": True}}
-            case "qwen-3.8-27b":
-                if not (options.thinking_enabled and self.thinking):
-                    return {"top_k": 20, "chat_template_kwargs": {"thinking": False}}
-                return {}
-            case _:
-                return {}
+        # a copy, so a caller that edits the request cannot change the registry entry
+        body = self.extra_body_thinking if options.thinking_enabled and self.thinking else self.extra_body_no_thinking
+        return copy.deepcopy(body)
 
 
 def metacentrum_models() -> list[MetacentrumLLMModel]:
@@ -71,15 +71,23 @@ def metacentrum_models() -> list[MetacentrumLLMModel]:
         MetacentrumLLMModel("deepseek-v4.1-flash", "deepseek-v4.1-flash", thinking=True, new_api=True),
         MetacentrumLLMModel("glm-5.3", "glm-5.3", thinking=True, new_api=True, weak_structured_output=True),
         MetacentrumLLMModel("kimi-k3", "kimi-k3", thinking=True, new_api=True, supported_reasoning=_KIMI_REASONING),
-        MetacentrumLLMModel("qwen-3.5", "qwen3.5", thinking=True, new_api=True),
-        MetacentrumLLMModel("qwen-3.8-27b", "qwen3.8-27b", thinking=True, new_api=True, weak_structured_output=True, supported_reasoning=_QWEN3_8_REASONING),
+        MetacentrumLLMModel("qwen-3.5", "qwen3.5", thinking=True, new_api=True, extra_body_thinking=_QWEN3_5_THINKING),
+        MetacentrumLLMModel(
+            "qwen-3.8-27b",
+            "qwen3.8-27b",
+            thinking=True,
+            new_api=True,
+            weak_structured_output=True,
+            supported_reasoning=_QWEN3_8_REASONING,
+            extra_body_no_thinking=_QWEN3_8_NO_THINKING,
+        ),
         MetacentrumLLMModel("qwen-3.8-flash-next", "qwen3.8-flash-next", thinking=True, new_api=True),
         MetacentrumLLMModel("mistral-medium-3.5", "mistral-medium-3.5", thinking=True, new_api=True),
         MetacentrumLLMModel("gemma-4", "gemma4", thinking=True, new_api=True, weak_structured_output=True, supported_reasoning=_DEFAULT_REASONING),
         # no longer served by e-INFRA as of 2026-09-24; kept so recorded results still load
         MetacentrumLLMModel("deepseek-v4-flash", "deepseek-v4-flash", thinking=True, new_api=True, retired=True),
         MetacentrumLLMModel("deepseek-v3.2-thinking", "deepseek-v3.2-thinking", thinking=True, new_api=True, retired=True),
-        MetacentrumLLMModel("qwen-3.5-122b", "qwen3.5-122b", thinking=True, new_api=True, retired=True),
+        MetacentrumLLMModel("qwen-3.5-122b", "qwen3.5-122b", thinking=True, new_api=True, retired=True, extra_body_thinking=_QWEN3_5_THINKING),
         MetacentrumLLMModel("glm-5.2", "glm-5.2", thinking=True, new_api=True, weak_structured_output=True, retired=True),
         MetacentrumLLMModel("mistral-small-4", "mistral-small-4", thinking=True, new_api=True, retired=True),
     ]

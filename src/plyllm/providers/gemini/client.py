@@ -74,7 +74,7 @@ def _embedding_tokens(response: EmbedContentResponse, texts: list[str]) -> int:
 class GeminiLLMClient(LLMClient[GeminiLLMModel]):
     provider_key = Provider.GEMINI
 
-    def __init__(self, client: genai.client.AsyncClient, concurrency: int = 20) -> None:
+    def __init__(self, client: genai.client.AsyncClient, concurrency: int | None = None) -> None:
         super().__init__(gemini_models(), gemini_embedding_models(), concurrency)
         self._client = client
 
@@ -119,7 +119,7 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
     ) -> LLMResponse:
-        model: GeminiLLMModel = self.resolve_model(model_name)
+        model: GeminiLLMModel = self._resolve_for_generate(model_name, output_schema)
 
         params = model.extract_params(options)
         params.system_instruction = system.content

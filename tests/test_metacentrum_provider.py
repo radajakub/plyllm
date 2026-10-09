@@ -13,6 +13,7 @@ import warnings
 
 from pydantic import BaseModel, Field
 
+from plybench.llm import LLMCallOptions
 from plybench.llm.providers.metacentrum.client import _json_body, _schema_instructions, silence_proxy_serializer_warnings
 from plybench.llm.providers.metacentrum.models import metacentrum_models
 
@@ -81,3 +82,20 @@ def test_the_proxys_unmodellable_responses_do_not_bury_the_log():
         warnings.warn("a schema of ours really is wrong", UserWarning, stacklevel=1)
 
     assert [str(warning.message) for warning in caught] == ["a schema of ours really is wrong"]
+
+
+def test_the_extra_body_comes_from_the_model_entry_and_follows_the_thinking_switch():
+    qwen_3_8, qwen_3_5 = _model("qwen-3.8-27b"), _model("qwen-3.5")
+
+    assert qwen_3_8.extract_extra_body(LLMCallOptions(thinking_enabled=False)) == {"top_k": 20, "chat_template_kwargs": {"thinking": False}}
+    assert qwen_3_8.extract_extra_body(LLMCallOptions(thinking_enabled=True)) == {}
+    assert qwen_3_5.extract_extra_body(LLMCallOptions(thinking_enabled=True)) == {"chat_template_kwargs": {"thinking": True}}
+    assert qwen_3_5.extract_extra_body(LLMCallOptions(thinking_enabled=False)) == {}
+
+
+def test_editing_a_request_body_does_not_change_the_registry_entry():
+    model = _model("qwen-3.8-27b")
+
+    model.extract_extra_body(LLMCallOptions())["chat_template_kwargs"]["thinking"] = True
+
+    assert model.extract_extra_body(LLMCallOptions()) == {"top_k": 20, "chat_template_kwargs": {"thinking": False}}
