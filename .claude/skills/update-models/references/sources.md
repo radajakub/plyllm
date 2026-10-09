@@ -1,6 +1,6 @@
 # Provider documentation sources
 
-Where the model data in `src/plybench/llm/providers/*/models.py` comes from. Verified 2026-10-07.
+Where the model data in `src/plybench/llm/providers/*/models.py` comes from. Verified 2026-10-09.
 
 Fetch the pricing page and the per-model pages in parallel; the pricing pages carry every model's
 rates in one table, and the per-model pages are the only place that lists a model's exact set of
@@ -20,12 +20,17 @@ which levels a model accepts — prefer the intersection, because an unsupported
 `platform.claude.com` URL directly to save a round trip.
 
 Repository notes: `cached_input_cost` is the cache-read rate, normally 0.1x input but 0.025x on
-Fable 5.1 and 0.05x on Opus 5.5. "Adaptive (always on)" in the docs maps to `thinking_only=True`.
+Fable 5.1 and 0.05x on Opus 5.5 and Sonnet 5.5. The models endpoint lists some older models only by dated snapshot (`claude-haiku-4-5-20251001`,
+`claude-opus-4-5-20251101`, `claude-sonnet-4-5-20250929`), not by alias, so use the snapshot there. Haiku 5.5 has two price tiers (prompts up to / over
+100k tokens); the repository stores the lower one. "Adaptive (always on)" in the docs maps to `thinking_only=True`.
 Models whose docs say thinking cannot be disabled at any effort are `thinking_only`; Opus 5 can only
 disable it at `high` or below, which `_THINKING_ONLY_EFFORTS` already encodes. Sonnet 5.5 rejects
 `"disabled"` and only offers `thinking: {"type": "between_tools"}` (effort `high` or below), which the
 harness does not model, so it is `thinking_only`. The per-model thinking table ("Rejected with 400")
-is at <https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting>.
+is at <https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting>. Its footnote
+names only Opus 5 and Haiku 5.5 as rejecting `"disabled"` at `xhigh`/`max`; the repository applies
+that rule to every Claude model (`_THINKING_ONLY_EFFORTS`), which the docs neither confirm nor rule
+out for Opus 4.8, Sonnet 5 and Sonnet 4.6.
 
 ## OpenAI (`openai`)
 
@@ -39,7 +44,9 @@ is at <https://platform.claude.com/docs/en/build-with-claude/thinking-troublesho
 Repository notes: the per-model pages list `none` as an effort value; the harness expresses that as
 `thinking_enabled=False`, so `none` is never in a `supported_reasoning` set. Effort sets differ
 within a generation — GPT-6.x and GPT-5.6 accept `max`, GPT-5.5 and GPT-5.4 stop at `xhigh`, and the
-Pro variants start at `medium`. Cached input is not always 0.1x: gpt-6.1-sol is 0.05x.
+Pro variants start at `medium`. Cached input is not always 0.1x: gpt-6.1-sol is 0.05x. gpt-6.1-sol rejects `none` (thinking cannot be
+turned off), and the gpt-6-astra page does not list `none`. gpt-5.6-sol is on promotional pricing "at
+least through November 21, 2026". The gpt-5-mini / gpt-5-nano pages no longer list effort values.
 Shutdown dates: <https://developers.openai.com/api/docs/deprecations>.
 
 ## Google Gemini (`gemini`)
@@ -53,7 +60,11 @@ Repository notes: Flash pricing is promotional and dated — 3.8 / 3.7 / 3.6 Fla
 through 2026-12-31 and $1.50 / $7.50 after. Record the rate in force, with a comment giving the
 change date. Pro models have a >200k-token tier; the repository stores the standard tier only.
 The models page lists preview models that the deprecations page has already shut down — always
-cross-check both before keeping a `-preview` id.
+cross-check both before keeping a `-preview` id (on 2026-10-09 it still listed
+`gemini-embedding-2-preview`, which shut down on 2026-08-10). The thinking guide
+(<https://ai.google.dev/gemini-api/docs/thinking>) is the per-model table of thinking levels and
+defaults; it no longer documents `thinking_budget`, which the 2.5 models still use here. 3.8 and 3.7
+Flash reject `minimal`. 3.1 Flash-Lite is not in that table.
 
 ## xAI Grok (`grok`)
 
@@ -63,33 +74,48 @@ cross-check both before keeping a `-preview` id.
 
 Repository notes: prices are the standard sub-200k-token tier; requests reaching 200k are billed at
 roughly double for the whole request. The reasoning guide and the per-model pages disagree about
-`xhigh` on grok-4.5 and about whether grok-4.3 reasons at all — both are kept at low/medium/high.
-Reasoning cannot be disabled on any current Grok model.
+`xhigh` on grok-4.5 (the guide says it is silently treated as `high`) and about whether grok-4.3
+reasons at all — both are kept at low/medium/high. The guide documents `reasoning_effort` only for
+grok-4.7 / 4.6 / 4.5, and the grok-4.20 page has no effort section, so grok-4.20 takes none.
+Reasoning cannot be disabled on grok-4.7 / 4.6 / 4.5; grok-4.3 accepts `none` (default `low`), which
+the harness cannot send yet. Retirements: <https://docs.x.ai/developers/migration/may-15-retirement>.
+
+**Waiting to be re-added: grok-4.7 and grok-4.6.** Removed on 2026-10-09: the docs list them, but the
+API returns 404 for this account ("does not exist or your team does not have access to it"). On every
+update, check whether they are served now (free, needs `GROK_API_KEY`):
+
+```
+uv run python -c "import asyncio; from plybench.llm import LLM, LLMConfig, Provider; print(sorted(asyncio.run(LLM(LLMConfig.from_env()).served_models(Provider.GROK))))"
+```
+
+If the list contains them, add them back with the values from their model pages (on 2026-10-09:
+$2.00 / $6.00, cached $0.50; effort low/medium/high/xhigh, default high; reasoning cannot be
+disabled), run `make test-models`, and delete this paragraph.
 
 ## Mistral (`mistral`)
 
 - API pricing per model: <https://docs.mistral.ai/inference/pricing> (`mistral.ai/pricing/api` 301-redirects here)
-- One model's page, with its API id: `https://docs.mistral.ai/models/<slug>` (e.g. `mistral-large-4-0`)
+- One model's page, with its API id: `https://docs.mistral.ai/models/<slug>` (e.g. `mistral-large-4-0`,
+  `mistral-medium-3-5-26-04`, `mistral-small-4-0-26-03`; the undated slugs of the last two 404)
 - Model list, dated ids, deprecations: <https://docs.mistral.ai/getting-started/models/models_overview/>
 - Reasoning capability: <https://docs.mistral.ai/capabilities/reasoning/>
 
 Repository notes: docs slugs are not API ids — the model page shows the id next to the parameter
 count (`mistral-large-2512 +1` for Large 3, `mistral-large-4 +1` for Large 4). The reasoning page
 lists which models take `reasoning_effort` (Small, Medium 3.5, Large 4, hosted GLM 5.3), but only
-documents `high` and `none`. The accepted set comes from
-the installed SDK enum instead — read it directly:
-
-```
-cat .venv/lib/python3.13/site-packages/mistralai/client/models/reasoningeffort.py
-```
-
-It currently reads `none, minimal, low, medium, high, xhigh`; `_MISTRAL_REASONING` is that set minus
-`none`. Cached input is documented only as "up to -90% on input tokens", so `cached_input_cost` is
+documents `high` and `none`, so `_MISTRAL_REASONING` is `{high}` (`none` is what the provider sends
+when thinking is off). Do not take the set from the SDK enum (`none, minimal, low, medium, high,
+xhigh`): on 2026-10-09 `mistral-small-2603` rejected `low` with "Must be one of (none, high)".
+Widen the set for a model only after `make test-live` (or a single paid call, approved first) shows
+the API accepts the level. Cached input is documented only as "up to -90% on input tokens", so `cached_input_cost` is
 0.1x input. Large 4 is on an undated sale; the repository records the sale price
 with the list price in a comment. Large 3 and Ministral 3 are deliberately not in the repository
 because their reasoning support is undocumented. Hosted GLM 5.3 (`zai-glm-5-3`) documents only
 `low`/`high`/`max` and rejects `none`, which the provider sends when thinking is off; it is left out
-until the provider can express that.
+until the provider can express that. The Medium 3.5 page lists `mistral-medium-3-5`,
+`mistral-medium-3` and `mistral-medium-latest`, not the `mistral-medium-2604` the repository sends;
+`make test-models` shows whether the endpoint still serves it. WebFetch has swapped price labels on
+the Large 4 page; read the pricing table from raw HTML (`curl`) when in doubt.
 
 ## Metacentrum / e-INFRA (`metacentrum`)
 
@@ -101,11 +127,16 @@ The service replaces models without notice and the page has a separate "Obsolete
 check it, not just the main table. The page can lag the live endpoint (on 2026-10-07 it still read
 "Effective June 30, 2026" and listed `deepseek-v4-flash`, while `/v1/models` served
 `deepseek-v4.1-flash` from 2026-09-28). Prefer `GET https://llm.ai.e-infra.cz/v1/models` (free,
-needs `OS_API_KEY`) and ask before calling it. Models it drops are **kept** in `models.py` under a
-"no longer served" comment so existing experiment configs and recorded results still resolve
-(`resolve_model` raises on an unknown name). Reasoning-effort support is not documented per model,
-so leave `supported_reasoning=None` unless a model is known to accept it. The stable aliases
-(`qwen3.5`, `kimi`, `glm`, ...) resolve to whatever is current and are safe as `model_string`.
+needs `OS_API_KEY`) and ask before calling it. Models it drops are **kept** in `models.py`
+and marked `retired=True`, so existing experiment configs and recorded results still resolve and
+cost (`resolve_model` raises on an unknown name) while new calls are refused. `make test-models`
+(free, needs the keys in .env) compares every provider's active registry models with its served list
+and fails on a mismatch. Reasoning-effort support is not documented per model, so leave
+`supported_reasoning=None` unless a model is known to accept it; the only documented toggle is
+DeepSeek's `chat_template_kwargs: {"thinking": true}` (reasoning is off by default), on
+<https://docs.cerit.io/en/docs/ai-as-a-service/ai-api>. The stable aliases (`qwen3.5`, `kimi`,
+`glm`, ...) resolve to whatever is current, so they keep configs working but not outputs: `qwen3.5`
+points at `qwen3.5-int4` (397B, AWQ int4).
 
 ## Hugging Face (`huggingface`)
 
@@ -119,6 +150,7 @@ reasoning settings. Only verify the repo id still exists, e.g.
 make format
 make test
 make typecheck
+make test-models   # free: are all active models still served? Needs the keys in .env
 ```
 
 Then check the prices and effort sets round-trip:

@@ -57,6 +57,14 @@ def test_legacy_model_translates_effort_into_thinking_budget():
     assert "output_config" not in params
 
 
+def test_haiku_5_5_takes_the_effort_path_unlike_haiku_4_5():
+    model = _model("claude-haiku-5.5")
+
+    assert model.extract_params(LLMCallOptions(thinking_enabled=True, reasoning_effort="max"))["output_config"] == {"effort": "max"}
+    assert model.extract_params(LLMCallOptions(thinking_enabled=False, reasoning_effort="high"))["thinking"] == {"type": "disabled"}
+    assert "temperature" not in model.extract_params(LLMCallOptions(thinking_enabled=False, temperature=0.3))
+
+
 def test_thinking_budget_stays_below_max_tokens():
     params = _model("claude-haiku-4.5").extract_params(LLMCallOptions(thinking_enabled=True, reasoning_effort="high", max_tokens=3000))
 

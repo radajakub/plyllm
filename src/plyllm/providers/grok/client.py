@@ -84,6 +84,9 @@ class GrokLLMClient(LLMClient[GrokLLMModel]):
         # e.g. APIResponseValidationError: the API answered, with something the SDK could not read
         return FailureKind.PROVIDER if isinstance(error, APIError) else FailureKind.OTHER
 
+    async def served_models(self) -> set[str]:
+        return {model.id async for model in self._client.models.list()}
+
     async def generate(
         self,
         model_name: str,

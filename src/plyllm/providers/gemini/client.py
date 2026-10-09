@@ -108,6 +108,9 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
         code = getattr(error, "code", None)
         return FailureKind.CONNECTION if code is None else status_kind(code)
 
+    async def served_models(self) -> set[str]:
+        return {model.name.removeprefix("models/") async for model in await self._client.models.list() if model.name}
+
     async def generate(
         self,
         model_name: str,

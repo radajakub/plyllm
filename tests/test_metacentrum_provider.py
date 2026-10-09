@@ -47,7 +47,12 @@ def test_the_schema_is_asked_for_in_the_prompt_with_its_field_descriptions():
 
     assert instructions.startswith("You label reasoning mistakes.")
     assert "id of the code, or empty when none covers it" in instructions
-    assert json.loads(instructions.split("schema, and nothing else -- no prose, no code fence:\n")[1])["$defs"]
+    assert json.loads(instructions.split("No prose, no code fence.\n")[1])["$defs"]
+
+
+def test_the_prompt_asks_for_an_instance_not_the_schema():
+    # gemma-4 answered {"properties": {"action": ...}} when only told to "match" the schema
+    assert "do not repeat the schema itself" in _schema_instructions("Play.", Answer)
 
 
 def test_a_fenced_answer_is_unwrapped_before_anything_reads_it_as_json():

@@ -5,10 +5,9 @@ from typing import Any
 from plybench.llm.model import LLMModel
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
-# grok-4.5 and older accept reasoning_effort of low / medium / high
+# grok-4.5 accepts reasoning_effort of low / medium / high (xhigh is silently treated as high); grok-4.3 adds none,
+# which the harness cannot send yet
 _GROK_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})
-# grok-4.7 / grok-4.6 added the xhigh level
-_GROK_XHIGH_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh"})
 
 
 class GrokLLMModel(LLMModel):
@@ -22,6 +21,7 @@ class GrokLLMModel(LLMModel):
         thinking: bool = False,
         new_api: bool = False,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
+        retired: bool = False,
     ) -> None:
         super().__init__(
             model_name,
@@ -31,6 +31,7 @@ class GrokLLMModel(LLMModel):
             cached_input_cost=cached_input_cost,
             thinking=thinking,
             supported_reasoning=supported_reasoning,
+            retired=retired,
         )
         # new_api => reasoning-style model (reasons by default, no free temperature)
         self.new_api = new_api
@@ -55,14 +56,11 @@ class GrokLLMModel(LLMModel):
 def grok_models() -> list[GrokLLMModel]:
     # prices are the standard (< 200k context) tier, USD per 1M tokens
     return [
-        # grok-4.7 / grok-4.6 (reasoning cannot be disabled; effort low/medium/high/xhigh, default high)
-        GrokLLMModel("grok-4.7", "grok-4.7", input_cost=2.0, output_cost=6.0, cached_input_cost=0.5, thinking=True, new_api=True, supported_reasoning=_GROK_XHIGH_REASONING),
-        GrokLLMModel("grok-4.6", "grok-4.6", input_cost=2.0, output_cost=6.0, cached_input_cost=0.5, thinking=True, new_api=True, supported_reasoning=_GROK_XHIGH_REASONING),
         # grok-4.5 (reasoning cannot be disabled; effort low/medium/high)
         GrokLLMModel("grok-4.5", "grok-4.5", input_cost=2.0, output_cost=6.0, cached_input_cost=0.3, thinking=True, new_api=True, supported_reasoning=_GROK_REASONING),
-        # grok-4.3 (reasoning model; the model page also lists xhigh, the reasoning guide does not)
+        # grok-4.3 (default effort low; the model page lists xhigh in one place and not in another)
         GrokLLMModel("grok-4.3", "grok-4.3", input_cost=1.25, output_cost=2.5, cached_input_cost=0.2, thinking=True, new_api=True, supported_reasoning=_GROK_REASONING),
-        # grok-4.20 reasoning
+        # grok-4.20 reasoning (always reasons; the docs list no reasoning_effort for it)
         GrokLLMModel(
             "grok-4.20-reasoning",
             "grok-4.20-0309-reasoning",
@@ -71,6 +69,5 @@ def grok_models() -> list[GrokLLMModel]:
             cached_input_cost=0.2,
             thinking=True,
             new_api=True,
-            supported_reasoning=_GROK_REASONING,
         ),
     ]

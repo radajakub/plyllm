@@ -70,7 +70,7 @@ def test_temperature_is_forwarded_when_set():
 
 def test_unsupported_reasoning_effort_is_rejected():
     with pytest.raises(ValueError):
-        _model("mistral-small-4").extract_params(LLMCallOptions(thinking_enabled=True, reasoning_effort="max"))
+        _model("mistral-small-4").extract_params(LLMCallOptions(thinking_enabled=True, reasoning_effort="low"))
 
 
 def test_models_ship_without_quotas():

@@ -69,6 +69,9 @@ class LLM:
     def get_available_embedding_models(self, provider: Provider) -> list[EmbeddingModel]:
         return self._route(provider).get_available_embedding_models()
 
+    async def served_models(self, provider: Provider) -> set[str]:
+        return await self._route(provider).served_models()
+
     def resolve_model(self, provider: Provider, model_name: str) -> LLMModel:
         return self._route(provider).resolve_model(model_name)
 

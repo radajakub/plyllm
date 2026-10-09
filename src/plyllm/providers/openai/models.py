@@ -29,6 +29,7 @@ class OpenAILLMModel(LLMModel):
         thinking: bool = False,
         new_api: bool = False,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
+        retired: bool = False,
     ) -> None:
         super().__init__(
             model_name,
@@ -38,6 +39,7 @@ class OpenAILLMModel(LLMModel):
             cached_input_cost=cached_input_cost,
             thinking=thinking,
             supported_reasoning=supported_reasoning,
+            retired=retired,
         )
         # new_api => uses the Responses API reasoning-style models (no free temperature)
         self.new_api = new_api

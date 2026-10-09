@@ -11,7 +11,7 @@ from plybench.llm.concurrency import ProviderSemaphore, safe_call
 from plybench.llm.errors import FailureKind, LLMCallError, as_call_error
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
-from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
+from plybench.llm.model import RETIRED_MESSAGE, EmbeddingModel, EmbeddingTask, LLMModel
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.providers import Provider
 from plybench.llm.rate_limit import ModelLimits, RateGate, estimate_prompt_tokens, make_gate
@@ -49,6 +49,11 @@ class LLMClient(ABC, Generic[ModelT]):
         # optional hook: providers that need to download/verify resources (e.g. local models)
         # override this; remote providers keep the no-op default
         return None
+
+    async def served_models(self) -> set[str]:
+        # the model ids the provider's endpoint lists right now, to catch a retired or mistyped model_string
+        # before it fails a run. Remote providers override this with their SDK's list call, which is free
+        raise NotImplementedError(f"{self.provider_key.value} cannot list the models it serves")
 
     def resolve_model(self, model_name: str) -> ModelT:
         model = self._models.get(model_name, None)
@@ -176,6 +181,8 @@ class LLMClient(ABC, Generic[ModelT]):
         # task formatting, context guarding and batching are provider-independent; _embed_batch only
         # has to turn one ready-to-send batch into vectors
         model = self.resolve_embedding_model(model_name)
+        if model.retired:
+            raise ValueError(RETIRED_MESSAGE.format(name=model.model_name))
         if not texts:
             return EmbeddingResponse(self.provider_key, model.model_string, [], EmbeddingTokens())
 

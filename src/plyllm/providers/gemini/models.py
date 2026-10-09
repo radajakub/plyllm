@@ -36,6 +36,7 @@ class GeminiLLMModel(LLMModel):
         thinking_only: bool = False,
         uses_thinking_level: bool = False,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
+        retired: bool = False,
     ) -> None:
         super().__init__(
             model_name,
@@ -45,6 +46,7 @@ class GeminiLLMModel(LLMModel):
             thinking=thinking,
             thinking_only=thinking_only,
             supported_reasoning=supported_reasoning,
+            retired=retired,
         )
         self.uses_thinking_level = uses_thinking_level
 
