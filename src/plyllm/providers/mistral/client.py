@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 from mistralai.client import Mistral
 from mistralai.client.errors import MistralError
-from mistralai.client.models import AssistantMessage, ChatCompletionResponse, TextChunk, ThinkChunk, UsageInfo
+from mistralai.client.models import AssistantMessage, BaseModelCard, ChatCompletionResponse, FTModelCard, TextChunk, ThinkChunk, UsageInfo
 from mistralai.extra import response_format_from_pydantic_model
 from pydantic import BaseModel
 
@@ -98,6 +98,11 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
         if not isinstance(error, MistralError):
             return FailureKind.OTHER
         return status_kind(error.status_code)
+
+    async def served_models(self) -> set[str]:
+        listed = await self._client.models.list_async()
+        cards = [model for model in listed.data or [] if isinstance(model, (BaseModelCard, FTModelCard))]
+        return {name for card in cards for name in (card.id, *(card.aliases or []))}
 
     async def generate(
         self,

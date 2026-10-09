@@ -84,8 +84,13 @@ _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
 def _schema_instructions(system: str, output_schema: type[BaseModel]) -> str:
+    # "matching this schema" alone made gemma-4 copy the schema back ({"properties": {...}}) in 5 of 6 game
+    # prompts on 2026-10-09; saying it is an instance to fill in fixed all 10 test prompts
     schema = json.dumps(output_schema.model_json_schema(), indent=1)
-    return f"{system}\n\nReply with a single JSON object matching this schema, and nothing else -- no prose, no code fence:\n{schema}"
+    return (
+        f"{system}\n\nReply with a single JSON object that is an instance of the JSON Schema below: fill in the values, "
+        f"do not repeat the schema itself. No prose, no code fence.\n{schema}"
+    )
 
 
 def _json_body(text: str) -> str:
@@ -130,6 +135,9 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
             return status_kind(error.status_code)
         # e.g. APIResponseValidationError: the API answered, with something the SDK could not read
         return FailureKind.PROVIDER if isinstance(error, APIError) else FailureKind.OTHER
+
+    async def served_models(self) -> set[str]:
+        return {model.id async for model in self._client.models.list()}
 
     async def generate(
         self,

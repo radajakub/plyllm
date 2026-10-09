@@ -5,9 +5,9 @@ from typing import Any
 from plybench.llm.model import LLMModel
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
-# the SDK's ReasoningEffort enum minus "none" (which is what we send when thinking is off, so it is
-# not an effort a caller picks) and without OpenAI's "max" tier
-_MISTRAL_REASONING: frozenset[ReasoningEffort] = frozenset({"minimal", "low", "medium", "high", "xhigh"})
+# the docs document only "high" and "none" (sent when thinking is off), and mistral-small-2603 answers
+# 400 to "low": "Must be one of (none, high)". The SDK enum lists more levels than the models accept
+_MISTRAL_REASONING: frozenset[ReasoningEffort] = frozenset({"high"})
 
 # reasoning_effort is mandatory on these models; "none" suppresses the thinking chunk entirely
 _THINKING_OFF = "none"

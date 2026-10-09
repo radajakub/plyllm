@@ -7,7 +7,7 @@ from anthropic.types import ThinkingConfigParam
 from plybench.llm.model import LLMModel
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
-# Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Opus 4.8 / Sonnet 5.5 / Sonnet 5 accept the whole effort ladder
+# Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Opus 4.8 / Sonnet 5.5 / Sonnet 5 / Haiku 5.5 accept the whole effort ladder
 _EFFORT_FULL: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh", "max"})
 # Sonnet 4.6 predates the xhigh level
 _EFFORT_NO_XHIGH: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "max"})
@@ -40,6 +40,7 @@ class ClaudeLLMModel(LLMModel):
         supports_temperature: bool = False,
         max_output_tokens: int = 32000,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
+        retired: bool = False,
     ) -> None:
         super().__init__(
             model_name,
@@ -50,6 +51,7 @@ class ClaudeLLMModel(LLMModel):
             thinking=thinking,
             thinking_only=thinking_only,
             supported_reasoning=supported_reasoning,
+            retired=retired,
         )
         # uses_effort => reasoning depth is set with output_config.effort and thinking is adaptive;
         # legacy models take a numeric thinking budget instead and reject effort
@@ -99,7 +101,7 @@ class ClaudeLLMModel(LLMModel):
 
 def claude_models() -> list[ClaudeLLMModel]:
     # prices are USD per 1M tokens; cached_input_cost is the cache-read rate (0.1x input, except
-    # Fable 5.1 at 0.025x and Opus 5.5 at 0.05x)
+    # Fable 5.1 at 0.025x and Opus 5.5 / Sonnet 5.5 at 0.05x)
     return [
         # Claude Fable 5.x (thinking cannot be disabled; requires 30-day data retention on the org)
         ClaudeLLMModel(
@@ -135,7 +137,7 @@ def claude_models() -> list[ClaudeLLMModel]:
             "claude-sonnet-5-5",
             input_cost=2.0,
             output_cost=10.0,
-            cached_input_cost=0.2,
+            cached_input_cost=0.1,
             thinking=True,
             thinking_only=True,
             supported_reasoning=_EFFORT_FULL,
@@ -152,10 +154,22 @@ def claude_models() -> list[ClaudeLLMModel]:
             supports_temperature=True,
             supported_reasoning=_EFFORT_NO_XHIGH,
         ),
-        # Claude Haiku 4.5 (no effort parameter, numeric thinking budget, 64k output cap)
+        # Claude Haiku 5.5 (effort + adaptive thinking; thinking can be turned off at effort high or below).
+        # Prompts over 100k tokens cost 0.50 / 2.50 (cache read 0.05); only the <= 100k tier is stored
+        ClaudeLLMModel(
+            "claude-haiku-5.5",
+            "claude-haiku-5-5",
+            input_cost=0.1,
+            output_cost=0.5,
+            cached_input_cost=0.01,
+            thinking=True,
+            supported_reasoning=_EFFORT_FULL,
+        ),
+        # Claude Haiku 4.5 (no effort parameter, numeric thinking budget, 64k output cap). The pinned snapshot:
+        # the models endpoint does not list the claude-haiku-4-5 alias, which resolves to it
         ClaudeLLMModel(
             "claude-haiku-4.5",
-            "claude-haiku-4-5",
+            "claude-haiku-4-5-20251001",
             input_cost=1.0,
             output_cost=5.0,
             cached_input_cost=0.1,

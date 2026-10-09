@@ -14,6 +14,8 @@ from plybench.utils.enums import ExtendedEnum
 DEFAULT_OUTPUT_ESTIMATE = 8_000
 # providers cap how many inputs a single embedding request may carry; larger calls are split into batches
 DEFAULT_EMBEDDING_BATCH_SIZE = 100
+# a retired model stays in its registry so recorded results still resolve and cost; it cannot be called
+RETIRED_MESSAGE = "Model {name} is retired: the provider no longer serves it. It stays in the registry only so recorded results still load."
 
 
 class EmbeddingTask(str, ExtendedEnum):
@@ -38,6 +40,7 @@ class EmbeddingModel(ABC):
         output_dimensionality: int | None = None,
         truncates_input: bool = False,
         limits: ModelLimits | None = None,
+        retired: bool = False,
     ) -> None:
         if max_batch_size < 1:
             raise ValueError("max_batch_size must be at least 1")
@@ -53,6 +56,7 @@ class EmbeddingModel(ABC):
         self.truncates_input = truncates_input
         # per-model quota; None means only the provider-wide semaphore applies
         self.limits = limits
+        self.retired = retired
 
     def cost(self, tokens: EmbeddingTokens) -> float:
         return tokens.input_tokens / MILLION * self.input_cost
@@ -89,6 +93,7 @@ class LLMModel(ABC):
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
         limits: ModelLimits | None = None,
         default_output_estimate: int = DEFAULT_OUTPUT_ESTIMATE,
+        retired: bool = False,
     ) -> None:
         self.model_name = model_name  # stable internal alias, used in configs/results
         self.model_string = model_string  # exact vendor id sent to the API
@@ -106,6 +111,7 @@ class LLMModel(ABC):
         # per-model quota; None means only the provider-wide semaphore applies
         self.limits = limits
         self.default_output_estimate = default_output_estimate
+        self.retired = retired
 
     def cost(self, tokens: LLMTokens) -> float:
         uncached_cost = max(tokens.input_tokens - tokens.cached_input_tokens, 0) / MILLION * self.input_cost
@@ -115,6 +121,9 @@ class LLMModel(ABC):
 
     def _validate_common(self, options: LLMCallOptions) -> None:
         # validation to verify that the options are compatible with the model
+        if self.retired:
+            raise ValueError(RETIRED_MESSAGE.format(name=self.model_name))
+
         if options.thinking_enabled and not self.thinking:
             raise ValueError(f"Model {self.model_name} does not support thinking")
 

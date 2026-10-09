@@ -4,7 +4,7 @@ from plybench.llm.model import EmbeddingModel, EmbeddingTask
 
 
 class HuggingFaceEmbeddingModel(EmbeddingModel):
-    def __init__(self, model_name: str, model_string: str, max_length: int = 512, batch_size: int = 64) -> None:
+    def __init__(self, model_name: str, model_string: str, max_length: int = 512, batch_size: int = 64, retired: bool = False) -> None:
         # model_string is the HF repo id; local models are free and carry no cost. The tokenizer
         # truncates to max_length, so oversized inputs are handled rather than rejected.
         super().__init__(
@@ -14,6 +14,7 @@ class HuggingFaceEmbeddingModel(EmbeddingModel):
             input_cost=0.0,
             max_batch_size=batch_size,
             truncates_input=True,
+            retired=retired,
         )
 
     def format_texts(self, texts: list[str], task: EmbeddingTask) -> list[str]:

@@ -19,6 +19,7 @@ class MetacentrumLLMModel(LLMModel):
         new_api: bool = False,
         weak_structured_output: bool = False,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
+        retired: bool = False,
     ) -> None:
         super().__init__(
             model_name,
@@ -28,6 +29,7 @@ class MetacentrumLLMModel(LLMModel):
             thinking=thinking,
             weak_structured_output=weak_structured_output,
             supported_reasoning=supported_reasoning,
+            retired=retired,
         )
         self.new_api = new_api
 
@@ -74,10 +76,10 @@ def metacentrum_models() -> list[MetacentrumLLMModel]:
         MetacentrumLLMModel("qwen-3.8-flash-next", "qwen3.8-flash-next", thinking=True, new_api=True),
         MetacentrumLLMModel("mistral-medium-3.5", "mistral-medium-3.5", thinking=True, new_api=True),
         MetacentrumLLMModel("gemma-4", "gemma4", thinking=True, new_api=True, weak_structured_output=True, supported_reasoning=_DEFAULT_REASONING),
-        # no longer served by e-INFRA as of 2026-09-24; requests against them will fail
-        MetacentrumLLMModel("deepseek-v4-flash", "deepseek-v4-flash", thinking=True, new_api=True),
-        MetacentrumLLMModel("deepseek-v3.2-thinking", "deepseek-v3.2-thinking", thinking=True, new_api=True),
-        MetacentrumLLMModel("qwen-3.5-122b", "qwen3.5-122b", thinking=True, new_api=True),
-        MetacentrumLLMModel("glm-5.2", "glm-5.2", thinking=True, new_api=True, weak_structured_output=True),
-        MetacentrumLLMModel("mistral-small-4", "mistral-small-4", thinking=True, new_api=True),
+        # no longer served by e-INFRA as of 2026-09-24; kept so recorded results still load
+        MetacentrumLLMModel("deepseek-v4-flash", "deepseek-v4-flash", thinking=True, new_api=True, retired=True),
+        MetacentrumLLMModel("deepseek-v3.2-thinking", "deepseek-v3.2-thinking", thinking=True, new_api=True, retired=True),
+        MetacentrumLLMModel("qwen-3.5-122b", "qwen3.5-122b", thinking=True, new_api=True, retired=True),
+        MetacentrumLLMModel("glm-5.2", "glm-5.2", thinking=True, new_api=True, weak_structured_output=True, retired=True),
+        MetacentrumLLMModel("mistral-small-4", "mistral-small-4", thinking=True, new_api=True, retired=True),
     ]
