@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncOpenAI
+
+# private: the helper responses.parse() uses to build the strict schema; a test pins it against SDK upgrades
+from openai.lib._parsing._responses import type_to_text_format_param
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
@@ -23,6 +26,12 @@ _RETRY_ERRORS = (APIConnectionError, APIStatusError)
 
 def _reasoning_summaries(response: Any) -> list[str]:
     return [summary.text for item in response.output if item.type == "reasoning" for summary in item.summary]
+
+
+def _refusal(response: Any) -> str | None:
+    # a declined request comes back as a refusal content item instead of output text
+    refusals = [content.refusal for item in response.output if item.type == "message" for content in item.content if content.type == "refusal"]
+    return "\n".join(refusals) if refusals else None
 
 
 def responses_total_tokens(response: Any) -> int:
@@ -97,17 +106,20 @@ class GrokLLMClient(LLMClient[GrokLLMModel]):
             **params,
         )
         if output_schema is not None:
-            kwargs["text_format"] = output_schema
+            # the strict schema responses.parse() would send; the answer is checked by LLMClient._answer
+            # rather than inside the SDK, so one that does not fit keeps its raw text and tokens
+            kwargs["text"] = {"format": type_to_text_format_param(output_schema)}
 
-        method = self._client.responses.parse if output_schema is not None else self._client.responses.create
-
-        response = await self._dispatch(model, system, messages, options, lambda: method(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
+        response = await self._dispatch(model, system, messages, options, lambda: self._client.responses.create(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
 
         reasoning = _reasoning_summaries(response)
-        output_text = response.output_parsed.model_dump_json() if output_schema is not None and response.output_parsed is not None else response.output_text
         tokens = responses_tokens(response.usage)
 
-        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
+        refusal = _refusal(response)
+        if refusal is not None:
+            raise self._refused(model, refusal, refusal, reasoning, tokens)
+
+        return self._answer(model, response.output_text, reasoning, tokens, output_schema)
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         raise NotImplementedError("Grok embeddings are not supported in this package")

@@ -125,7 +125,7 @@ class _FakeMessages:
         self._message = message
         self.kwargs: dict = {}
 
-    async def parse(self, **kwargs) -> Message:
+    async def create(self, **kwargs) -> Message:
         self.kwargs = kwargs
         return self._message
 
@@ -146,7 +146,7 @@ def _message() -> Message:
 
 
 def test_generate_is_one_request_with_reasoning_and_thinking_tokens():
-    """Not streamed: one parse() call, like the other providers. The thinking-token count used to be read off
+    """Not streamed: one create() call, like the other providers. The thinking-token count used to be read off
     the stream events because the accumulated message dropped it; a plain response carries it in usage."""
     messages = _FakeMessages(_message())
     client = ClaudeLLMClient(cast(AsyncAnthropic, SimpleNamespace(messages=messages)), concurrency=1)
@@ -155,7 +155,7 @@ def test_generate_is_one_request_with_reasoning_and_thinking_tokens():
         client.generate("claude-opus-5", LLMMessage.system("rules"), [LLMMessage.user("your move")], LLMCallOptions(thinking_enabled=True, reasoning_effort="high"))
     )
 
-    assert "stream" not in messages.kwargs and "output_format" not in messages.kwargs
+    assert "stream" not in messages.kwargs and "format" not in messages.kwargs.get("output_config", {})
     assert messages.kwargs["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert response.output_text == "4"
     assert response.reasoning == ["take the centre"]

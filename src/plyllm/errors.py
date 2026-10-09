@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from pydantic import ValidationError
 
+from plybench.llm.response import LLMResponse
 from plybench.utils.enums import ExtendedEnum
 
 
@@ -13,15 +14,19 @@ class FailureKind(ExtendedEnum):
     CONNECTION = "connection"  # never reached the API
     PROVIDER = "provider_error"  # the API answered with an error
     UNPARSEABLE = "unparseable"  # an answer arrived and did not match the schema
+    REFUSAL = "refusal"  # the model declined to answer, or the provider blocked the answer
     NO_OUTPUT = "no_structured_output"  # the call succeeded and carried no parsed object
     STALE_CACHE = "stale_cache"  # a cached answer no longer matches the schema it was stored under
     OTHER = "other"
 
 
 class LLMCallError(Exception):
-    def __init__(self, kind: FailureKind, message: str) -> None:
+    def __init__(self, kind: FailureKind, message: str, response: LLMResponse | None = None) -> None:
         super().__init__(message)
         self.kind = kind
+        # the answer that did arrive when the call itself succeeded (UNPARSEABLE, REFUSAL), so its text and
+        # its cost are not lost with the exception; None for transport failures
+        self.response = response
 
 
 class LLMRateLimited(LLMCallError):
@@ -62,8 +67,8 @@ def as_call_error(error: Exception, kind: FailureKind) -> LLMCallError:
     if isinstance(error, LLMCallError):
         return error
     if isinstance(error, ValidationError):
-        # the SDKs parse structured output themselves, so this is raised inside the call and never
-        # reaches a provider's `error_kind`, which only knows that SDK's own transport types
+        # a provider's `error_kind` only knows its SDK's transport types; a schema mismatch raised inside
+        # the call is still the answer not fitting, whatever that provider guessed
         kind = FailureKind.UNPARSEABLE
     message = f"{type(error).__name__}: {error}"
     subclass = _SUBCLASSES.get(kind)

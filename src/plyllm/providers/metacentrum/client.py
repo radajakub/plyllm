@@ -6,6 +6,9 @@ import warnings
 from typing import Any
 
 from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncOpenAI
+
+# private: the helper responses.parse() uses to build the strict schema; a test pins it against SDK upgrades
+from openai.lib._parsing._responses import type_to_text_format_param
 from pydantic import BaseModel
 
 from plybench.llm.client import DEFAULT_RETRIES, LLMClient
@@ -22,6 +25,12 @@ from plybench.llm.tokens import LLMTokens
 # APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
 # cover every failure the SDK raises for a request that was sent
 _RETRY_ERRORS = (APIConnectionError, APIStatusError)
+
+
+def _refusal(response: Any) -> str | None:
+    # a declined request comes back as a refusal content item instead of output text
+    refusals = [content.refusal for item in response.output if item.type == "message" for content in item.content if content.type == "refusal"]
+    return "\n".join(refusals) if refusals else None
 
 
 def responses_total_tokens(response: Any) -> int:
@@ -148,25 +157,23 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
             **params,
         )
         if output_schema is not None and not ask_in_prompt:
-            kwargs["text_format"] = output_schema
+            # the strict schema responses.parse() would send; the answer is checked by LLMClient._answer
+            # rather than inside the SDK, so one that does not fit keeps its raw text and tokens
+            kwargs["text"] = {"format": type_to_text_format_param(output_schema)}
 
-        enforced = output_schema is not None and not ask_in_prompt
-        method = self._client.responses.parse if enforced else self._client.responses.create
+        response = await self._dispatch(model, system, messages, options, lambda: self._client.responses.create(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
 
-        response = await self._dispatch(model, system, messages, options, lambda: method(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
-
-        if enforced:
-            reasoning = [content.text for item in response.output if item.type == "reasoning" for content in item.content or [] if content.text is not None]
-            output_text = response.output_parsed.model_dump_json() if response.output_parsed is not None else response.output_text
-        else:
-            # also the path for an asked-for schema, so the inline <think> block a hosted model may emit
-            # is stripped before anything tries to read the answer as JSON
-            output_text, reasoning = _extract_text_and_reasoning(response)
-            if ask_in_prompt:
-                output_text = _json_body(output_text)
-
+        # every path strips the inline <think> block a hosted model may emit before the answer is read as JSON
+        output_text, reasoning = _extract_text_and_reasoning(response)
+        if ask_in_prompt:
+            output_text = _json_body(output_text)
         tokens = responses_tokens(response.usage)
-        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
+
+        refusal = _refusal(response)
+        if refusal is not None:
+            raise self._refused(model, refusal, refusal, reasoning, tokens)
+
+        return self._answer(model, output_text, reasoning, tokens, output_schema)
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         raise NotImplementedError("Metacentrum embeddings are not supported in this package")

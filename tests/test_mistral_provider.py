@@ -9,6 +9,7 @@ from mistralai.client.models import AssistantMessage, ChatCompletionChoice, Chat
 from pydantic import BaseModel, ValidationError
 
 from plybench.llm import LLM, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMMessage, MistralProviderConfig, ModelLimits, Provider
+from plybench.llm.errors import FailureKind, LLMCallError
 from plybench.llm.providers.mistral.client import MistralLLMClient, _is_retryable, completion_tokens, split_content
 from plybench.llm.providers.mistral.models import MistralLLMModel, mistral_models
 from plybench.llm.rate_limit import ModelGate, NoLimits
@@ -231,8 +232,14 @@ def test_generate_validates_structured_output_from_chunked_content():
 def test_generate_rejects_output_that_violates_the_schema():
     client, _ = _client(AssistantMessage(content=[TextChunk(text='{"move": "centre"}')]))
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(LLMCallError) as caught:
         asyncio.run(client.generate("mistral-small-4", LLMMessage.system("rules"), [LLMMessage.user("go")], LLMCallOptions(), output_schema=_Move))
+
+    # the same kind every provider raises, with the answer that did arrive so its text and cost are kept
+    assert caught.value.kind is FailureKind.UNPARSEABLE
+    assert isinstance(caught.value.__cause__, ValidationError)
+    assert caught.value.response is not None and caught.value.response.output_text == '{"move": "centre"}'
+    assert caught.value.response.tokens.output_tokens == 40
 
 
 def test_embeddings_are_not_supported():

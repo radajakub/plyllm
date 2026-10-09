@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from anthropic import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncAnthropic
+from anthropic import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncAnthropic, transform_schema
 from anthropic.types import Message, MessageParam, TextBlockParam, Usage
 from pydantic import BaseModel
 
@@ -100,23 +100,23 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
 
         kwargs: dict[str, Any] = dict(model=model.model_string, system=system_blocks, messages=contents, **params)
         if output_schema is not None:
-            kwargs["output_format"] = output_schema
+            # the schema messages.parse() would send, merged with the effort setting. The answer is checked by
+            # LLMClient._answer rather than inside the SDK, which would fail on a refusal before we saw it
+            kwargs["output_config"] = {**kwargs.get("output_config", {}), "format": {"type": "json_schema", "schema": transform_schema(output_schema.model_json_schema())}}
 
-        # one request like the other providers; parse() with no output_format returns the plain message. Not
-        # streamed, so the client timeout caps the whole answer: raise CLAUDE_TIMEOUT for long max-effort runs
-        response = await self._dispatch(model, system, messages, options, lambda: self._client.messages.parse(**kwargs), _RETRY_ERRORS, tokens_of=_total_tokens)
+        # not streamed, so the client timeout caps the whole answer: raise CLAUDE_TIMEOUT for long max-effort runs
+        response = await self._dispatch(model, system, messages, options, lambda: self._client.messages.create(**kwargs), _RETRY_ERRORS, tokens_of=_total_tokens)
+
+        output_text = _output_text(response)
+        tokens = message_tokens(response.usage)
+        reasoning = _thinking_summaries(response)
 
         if response.stop_reason == "refusal":
             details = response.stop_details
             category = details.category if details is not None else None
-            raise ValueError(f"Model {model.model_string} refused the request (category: {category})")
+            raise self._refused(model, f"category {category}", output_text, reasoning, tokens)
 
-        parsed_output: BaseModel | None = response.parsed_output if output_schema is not None else None
-        output_text = parsed_output.model_dump_json() if parsed_output is not None else _output_text(response)
-        tokens = message_tokens(response.usage)
-        reasoning = _thinking_summaries(response)
-
-        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
+        return self._answer(model, output_text, reasoning, tokens, output_schema)
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         raise NotImplementedError("Claude embeddings are not supported in this package")
