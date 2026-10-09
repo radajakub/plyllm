@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 from google import genai
 from google.genai.errors import APIError
-from google.genai.types import Content, ContentUnion, EmbedContentConfig, EmbedContentResponse, GenerateContentResponse, HttpOptions, Part
+from google.genai.types import Content, ContentUnion, EmbedContentConfig, EmbedContentResponse, FinishReason, GenerateContentResponse, HttpOptions, Part
 from pydantic import BaseModel
 
 from plybench.llm.client import LLMClient
@@ -22,6 +22,8 @@ from plybench.llm.tokens import EmbeddingTokens, LLMTokens
 # pinned to httpx (see build), so httpx's types are the only transport failures it can raise.
 _RETRY_ERRORS = (APIError, httpx.TransportError)
 _ROLE_MAP = {"user": "user", "assistant": "model", "system": "user"}
+# finish reasons that mean the answer was withheld on policy grounds, not cut short or failed
+_BLOCKED_FINISH = frozenset({FinishReason.SAFETY, FinishReason.BLOCKLIST, FinishReason.PROHIBITED_CONTENT, FinishReason.SPII, FinishReason.RECITATION})
 
 
 def _total_tokens(response: GenerateContentResponse) -> int:
@@ -30,6 +32,17 @@ def _total_tokens(response: GenerateContentResponse) -> int:
     if usage is None:
         return 0
     return (usage.prompt_token_count or 0) + (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
+
+
+def _blocked(response: GenerateContentResponse) -> str | None:
+    # Gemini has no refusal message: a declined request is a blocked prompt or an answer stopped by a filter
+    feedback = response.prompt_feedback
+    if feedback is not None and feedback.block_reason is not None:
+        return f"prompt blocked ({feedback.block_reason.value})"
+    finish = response.candidates[0].finish_reason if response.candidates else None
+    if finish is not None and finish in _BLOCKED_FINISH:
+        return f"answer blocked ({finish.value})"
+    return None
 
 
 def _extract_reasoning(response: GenerateContentResponse) -> list[str]:
@@ -139,7 +152,11 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
         reasoning = _extract_reasoning(response)
         output_text = response.text or ""
 
-        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, output_schema)
+        blocked = _blocked(response)
+        if blocked is not None:
+            raise self._refused(model, blocked, output_text, reasoning, tokens)
+
+        return self._answer(model, output_text, reasoning, tokens, output_schema)
 
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         # one Content per text: passing bare parts would return a single aggregated vector instead

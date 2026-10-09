@@ -118,7 +118,7 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
         kwargs: dict[str, Any] = dict(model=model.model_string, messages=contents, prompt_cache_key="PlyBench", **params)
         if output_schema is not None:
             # chat.parse_async() rejects the chunked content reasoning models return, so we send the
-            # strict schema it would have built and validate the text ourselves
+            # strict schema it would have built; LLMClient._answer checks the answer
             kwargs["response_format"] = response_format_from_pydantic_model(output_schema)
 
         response = await self._dispatch(
@@ -133,10 +133,8 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
 
         choice = response.choices[0] if response.choices else None
         reasoning, output_text = split_content(choice.message if choice is not None else None)
-        if output_schema is not None:
-            output_text = output_schema.model_validate_json(output_text).model_dump_json()
 
-        return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, completion_tokens(response.usage), output_schema)
+        return self._answer(model, output_text, reasoning, completion_tokens(response.usage), output_schema)
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         raise NotImplementedError("Mistral embeddings are not supported in this package")

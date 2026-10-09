@@ -48,9 +48,7 @@ class LLMResponse:
         output_schema: type[BaseModel] | None,
     ) -> LLMResponse:
         # reasoning first, then the answer: the order the providers return them in
-        items: list[LLMResponseItem] = []
-        if reasoning:
-            items.append(ReasoningTrace(reasoning))
+        items: list[LLMResponseItem] = [ReasoningTrace(reasoning)] if reasoning else []
         items.append(OutputText([output_text]))
         return cls(provider, model_string, tokens, items, output_text, output_schema)
 

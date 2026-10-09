@@ -5,10 +5,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from plybench.llm.concurrency import ProviderSemaphore, safe_call
-from plybench.llm.errors import FailureKind, as_call_error
+from plybench.llm.errors import FailureKind, LLMCallError, as_call_error
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
@@ -137,6 +137,21 @@ class LLMClient(ABC, Generic[ModelT]):
             )
         except Exception as error:
             raise as_call_error(error, self.error_kind(error)) from error
+
+    def _answer(self, model: LLMModel, output_text: str, reasoning: list[str], tokens: LLMTokens, output_schema: type[BaseModel] | None) -> LLMResponse:
+        if output_schema is None:
+            return LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, None)
+
+        try:
+            normalised = output_schema.model_validate_json(output_text).model_dump_json()
+        except ValidationError as error:
+            raw = LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, None)
+            raise LLMCallError(FailureKind.UNPARSEABLE, f"{type(error).__name__}: {error}", raw) from error
+        return LLMResponse.from_parts(self.provider_key, model.model_string, normalised, reasoning, tokens, output_schema)
+
+    def _refused(self, model: LLMModel, reason: str, output_text: str, reasoning: list[str], tokens: LLMTokens) -> LLMCallError:
+        answer = LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, None)
+        return LLMCallError(FailureKind.REFUSAL, f"Model {model.model_string} refused the request: {reason}", answer)
 
     @abstractmethod
     def _should_retry_on_error(self, error: Exception) -> bool:
