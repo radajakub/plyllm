@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import warnings
 
+import pytest
 from pydantic import BaseModel, Field
 
 from plybench.llm import LLMCallOptions
@@ -87,15 +88,39 @@ def test_the_proxys_unmodellable_responses_do_not_bury_the_log():
 def test_the_extra_body_comes_from_the_model_entry_and_follows_the_thinking_switch():
     qwen_3_8, qwen_3_5 = _model("qwen-3.8-27b"), _model("qwen-3.5")
 
-    assert qwen_3_8.extract_extra_body(LLMCallOptions(thinking_enabled=False)) == {"top_k": 20, "chat_template_kwargs": {"thinking": False}}
+    assert qwen_3_8.extract_extra_body(LLMCallOptions(thinking_enabled=False)) == {"top_k": 20, "chat_template_kwargs": {"enable_thinking": False}}
     assert qwen_3_8.extract_extra_body(LLMCallOptions(thinking_enabled=True)) == {}
     assert qwen_3_5.extract_extra_body(LLMCallOptions(thinking_enabled=True)) == {"chat_template_kwargs": {"thinking": True}}
-    assert qwen_3_5.extract_extra_body(LLMCallOptions(thinking_enabled=False)) == {}
+    assert qwen_3_5.extract_extra_body(LLMCallOptions(thinking_enabled=False)) == {"chat_template_kwargs": {"enable_thinking": False}}
+
+
+def test_thinking_off_uses_the_switch_each_template_reads():
+    # the Qwen templates ignore "thinking" and read "enable_thinking"; kimi's reads "thinking" (probe, 2026-10-09)
+    for name in ("qwen-3.5", "qwen-3.8-27b", "qwen-3.8-flash-next"):
+        assert _model(name).extract_extra_body(LLMCallOptions())["chat_template_kwargs"] == {"enable_thinking": False}
+    assert _model("kimi-k3").extract_extra_body(LLMCallOptions()) == {"chat_template_kwargs": {"thinking": False}}
+
+
+def test_models_that_reason_whatever_is_sent_refuse_thinking_off():
+    for name in ("gpt-oss-120b", "deepseek-v4.1-flash"):
+        with pytest.raises(ValueError, match="requires thinking"):
+            _model(name).extract_params(LLMCallOptions(thinking_enabled=False))
+
+
+def test_gemma_needs_an_effort_to_reason():
+    with pytest.raises(ValueError, match="does not reason without a reasoning_effort"):
+        _model("gemma-4").extract_params(LLMCallOptions(thinking_enabled=True))
+    assert _model("gemma-4").extract_params(LLMCallOptions(thinking_enabled=True, reasoning_effort="low"))["reasoning"] == {"effort": "low"}
+
+
+def test_temperature_is_sent_on_metacentrum():
+    # it used to be dropped on every model, which only new_api (set on all of them) decided
+    assert _model("qwen-3.5").extract_params(LLMCallOptions(thinking_enabled=True, temperature=0.6))["temperature"] == 0.6
 
 
 def test_editing_a_request_body_does_not_change_the_registry_entry():
     model = _model("qwen-3.8-27b")
 
-    model.extract_extra_body(LLMCallOptions())["chat_template_kwargs"]["thinking"] = True
+    model.extract_extra_body(LLMCallOptions())["chat_template_kwargs"]["enable_thinking"] = True
 
-    assert model.extract_extra_body(LLMCallOptions()) == {"top_k": 20, "chat_template_kwargs": {"thinking": False}}
+    assert model.extract_extra_body(LLMCallOptions()) == {"top_k": 20, "chat_template_kwargs": {"enable_thinking": False}}

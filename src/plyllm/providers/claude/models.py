@@ -4,7 +4,7 @@ from typing import Any
 
 from anthropic.types import ThinkingConfigParam
 
-from plybench.llm.model import LLMModel
+from plybench.llm.model import LLMModel, TemperatureSupport
 from plybench.llm.options import LLMCallOptions, ReasoningEffort
 
 # Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Opus 4.8 / Sonnet 5.5 / Sonnet 5 / Haiku 5.5 accept the whole effort ladder
@@ -52,12 +52,14 @@ class ClaudeLLMModel(LLMModel):
             thinking_only=thinking_only,
             supported_reasoning=supported_reasoning,
             retired=retired,
+            # the newer models reject a non-default temperature on every request; older ones only with thinking on
+            temperature_support=TemperatureSupport.WITHOUT_THINKING if supports_temperature else TemperatureSupport.NEVER,
+            # "effort works with or without thinking": it also sets how long the answer is
+            effort_without_thinking=uses_effort,
         )
         # uses_effort => reasoning depth is set with output_config.effort and thinking is adaptive;
         # legacy models take a numeric thinking budget instead and reject effort
         self.uses_effort = uses_effort
-        # the effort-based models reject temperature / top_p / top_k outright
-        self.supports_temperature = supports_temperature
         # max_tokens is mandatory on every Anthropic request and caps thinking + answer together
         self.max_output_tokens = max_output_tokens
 
@@ -92,8 +94,8 @@ class ClaudeLLMModel(LLMModel):
         if self.uses_effort and options.reasoning_effort is not None:
             params["output_config"] = {"effort": options.reasoning_effort}
 
-        # sampling is rejected by the effort-based models, and by extended thinking on the legacy ones
-        if self.supports_temperature and not options.thinking_enabled and options.temperature is not None:
+        # validate() has already refused a temperature this model or this thinking setting does not take
+        if options.temperature is not None:
             params["temperature"] = options.temperature
 
         return params

@@ -42,7 +42,12 @@ out for Opus 4.8, Sonnet 5 and Sonnet 4.6.
 `platform.openai.com/docs/...` 301-redirects to `developers.openai.com/api/docs/...`.
 
 Repository notes: the per-model pages list `none` as an effort value; the harness expresses that as
-`thinking_enabled=False`, so `none` is never in a `supported_reasoning` set. Effort sets differ
+`thinking_enabled=False` (the provider sends effort `none`), so `none` is never in a `supported_reasoning`
+set. A model whose page does not list `none` is `thinking_only` (on 2026-10-09: gpt-6-astra, gpt-6.1-sol,
+the Pro models, and gpt-5-mini / gpt-5-nano, whose pages list no efforts at all). A model whose default
+effort is `none` (gpt-5.4, -mini, -nano) is `needs_effort_to_think`, or thinking on would not reason.
+Temperature is accepted only at effort `none` (GPT-6 migration guide, "When reasoning effort is not none,
+remove temperature, top_p"), which `OpenAILLMModel` derives from `thinking_only`. Effort sets differ
 within a generation — GPT-6.x and GPT-5.6 accept `max`, GPT-5.5 and GPT-5.4 stop at `xhigh`, and the
 Pro variants start at `medium`. Cached input is not always 0.1x: gpt-6.1-sol is 0.05x. gpt-6.1-sol rejects `none` (thinking cannot be
 turned off), and the gpt-6-astra page does not list `none`. gpt-5.6-sol is on promotional pricing "at
@@ -77,8 +82,10 @@ roughly double for the whole request. The reasoning guide and the per-model page
 `xhigh` on grok-4.5 (the guide says it is silently treated as `high`) and about whether grok-4.3
 reasons at all — both are kept at low/medium/high. The guide documents `reasoning_effort` only for
 grok-4.7 / 4.6 / 4.5, and the grok-4.20 page has no effort section, so grok-4.20 takes none.
-Reasoning cannot be disabled on grok-4.7 / 4.6 / 4.5; grok-4.3 accepts `none` (default `low`), which
-the harness cannot send yet. Retirements: <https://docs.x.ai/developers/migration/may-15-retirement>.
+Reasoning cannot be disabled on grok-4.7 / 4.6 / 4.5, so they are `thinking_only`, as is grok-4.20
+(no effort section; it always reasons); grok-4.3 accepts `none` (default `low`), which the provider sends
+when thinking is off. No page documents `temperature` for the reasoning models, so every Grok model has
+`TemperatureSupport.NEVER`; nor is `reasoning.summary` documented (it is still sent with an effort). Retirements: <https://docs.x.ai/developers/migration/may-15-retirement>.
 
 **Waiting to be re-added: grok-4.7 and grok-4.6.** Removed on 2026-10-09: the docs list them, but the
 API returns 404 for this account ("does not exist or your team does not have access to it"). On every
@@ -134,7 +141,14 @@ cost (`resolve_model` raises on an unknown name) while new calls are refused. `m
 and fails on a mismatch. Reasoning-effort support is not documented per model, so leave
 `supported_reasoning=None` unless a model is known to accept it; the only documented toggle is
 DeepSeek's `chat_template_kwargs: {"thinking": true}` (reasoning is off by default), on
-<https://docs.cerit.io/en/docs/ai-as-a-service/ai-api>. The stable aliases (`qwen3.5`, `kimi`,
+<https://docs.cerit.io/en/docs/ai-as-a-service/ai-api>. That page is out of date: on 2026-10-09
+deepseek-v4.1-flash reasoned with and without it, and with `thinking: false`. The thinking flags come
+from a free probe instead (one short prompt per model, thinking on and off, reasoning tokens counted; put
+a unique id in each prompt, because the proxy caches identical prompts and ignores `extra_body` when it
+does). Results on 2026-10-09: the Qwen templates read `enable_thinking` (not `thinking`), kimi-k3 reads
+`thinking`, gpt-oss-120b and deepseek-v4.1-flash always reason (`thinking_only`), gemma-4 reasons only with
+an effort (`needs_effort_to_think`), mistral-medium-3.5 gave no reasoning with thinking on
+(`thinking=False`), and glm-5.3 answered every call with 400 "`tools` must not be an empty array". The stable aliases (`qwen3.5`, `kimi`,
 `glm`, ...) resolve to whatever is current, so they keep configs working but not outputs: `qwen3.5`
 points at `qwen3.5-int4` (397B, AWQ int4).
 
