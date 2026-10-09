@@ -58,7 +58,7 @@ def responses_tokens(usage: Any) -> LLMTokens:
 class OpenAILLMClient(LLMClient[OpenAILLMModel]):
     provider_key = Provider.OPENAI
 
-    def __init__(self, client: AsyncOpenAI, concurrency: int = 10) -> None:
+    def __init__(self, client: AsyncOpenAI, concurrency: int | None = None) -> None:
         super().__init__(openai_models(), openai_embedding_models(), concurrency)
         self._client = client
 
@@ -100,9 +100,7 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel]):
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
     ) -> LLMResponse:
-        model = self.resolve_model(model_name)
-        if output_schema is not None and not model.can_use_json_schema:
-            raise ValueError(f"Model {model.model_name} does not support JSON schema")
+        model = self._resolve_for_generate(model_name, output_schema)
 
         params = model.extract_params(options)
         kwargs: dict[str, Any] = dict(

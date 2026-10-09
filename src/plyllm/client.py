@@ -9,7 +9,7 @@ from pydantic import BaseModel, ValidationError
 
 from plybench.llm.concurrency import ProviderSemaphore, safe_call
 from plybench.llm.errors import FailureKind, LLMCallError, as_call_error
-from plybench.llm.llm_config import LLMConfig
+from plybench.llm.llm_config import DEFAULT_CONCURRENCY, LLMConfig
 from plybench.llm.message import LLMMessage
 from plybench.llm.model import RETIRED_MESSAGE, EmbeddingModel, EmbeddingTask, LLMModel
 from plybench.llm.options import LLMCallOptions
@@ -27,11 +27,13 @@ ModelT = TypeVar("ModelT", bound=LLMModel)
 
 class LLMClient(ABC, Generic[ModelT]):
     provider_key: Provider
+    # in-flight requests when the caller sets no concurrency; a provider with a tighter quota lowers it
+    default_concurrency: int = DEFAULT_CONCURRENCY
 
-    def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int = 10, retries: int = DEFAULT_RETRIES) -> None:
+    def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int | None = None, retries: int = DEFAULT_RETRIES) -> None:
         self._models: dict[str, ModelT] = {model.model_name: model for model in models}
         self._embedding_models: dict[str, EmbeddingModel] = {model.model_name: model for model in embedding_models}
-        self._semaphore = ProviderSemaphore(concurrency)
+        self._semaphore = ProviderSemaphore(concurrency if concurrency is not None else self.default_concurrency)
         # the SDKs retry inside each of these, so the two counts multiply: a provider that stalls needs a
         # lower number here rather than a longer timeout there
         self._retries = retries
@@ -59,6 +61,12 @@ class LLMClient(ABC, Generic[ModelT]):
         model = self._models.get(model_name, None)
         if model is None:
             raise ValueError(f"Model {model_name} not found for provider {self.provider_key.value}")
+        return model
+
+    def _resolve_for_generate(self, model_name: str, output_schema: type[BaseModel] | None) -> ModelT:
+        model = self.resolve_model(model_name)
+        if output_schema is not None and not model.can_use_json_schema:
+            raise ValueError(f"Model {model.model_name} does not support JSON schema")
         return model
 
     def resolve_embedding_model(self, model_name: str) -> EmbeddingModel:
@@ -180,6 +188,8 @@ class LLMClient(ABC, Generic[ModelT]):
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         # task formatting, context guarding and batching are provider-independent; _embed_batch only
         # has to turn one ready-to-send batch into vectors
+        if not self._embedding_models:
+            raise NotImplementedError(f"{self.provider_key.value} embeddings are not supported in this package")
         model = self.resolve_embedding_model(model_name)
         if model.retired:
             raise ValueError(RETIRED_MESSAGE.format(name=model.model_name))
@@ -201,6 +211,6 @@ class LLMClient(ABC, Generic[ModelT]):
         tokens = sum((batch.tokens for batch in batches), EmbeddingTokens())
         return EmbeddingResponse(self.provider_key, model.model_string, embeddings, tokens)
 
-    @abstractmethod
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
-        raise NotImplementedError
+        # only reached by providers that register embedding models, and those override it
+        raise NotImplementedError(f"{self.provider_key.value} embeddings are not supported in this package")

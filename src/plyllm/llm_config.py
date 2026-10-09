@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 from dotenv import dotenv_values
 
-# max in-flight requests per provider; this is the ceiling that actually protects against rate limits
+# max in-flight requests per provider, unless the provider sets its own; this is the ceiling that actually
+# protects against rate limits
 DEFAULT_CONCURRENCY = 10
 # seconds one request may take before the SDK gives up and our retry layer takes over; long enough for
 # a slow thinking trace, short enough that a stalled connection does not hang a run forever
@@ -74,7 +75,8 @@ class LLMConfig:
     mistral: MistralProviderConfig | None = None
     metacentrum: MetacentrumProviderConfig | None = None
     huggingface: HuggingFaceProviderConfig | None = None
-    default_concurrency: int = DEFAULT_CONCURRENCY
+    # None lets each provider use its own default (LLMClient.default_concurrency)
+    default_concurrency: int | None = None
 
     @classmethod
     def from_env(cls, default_concurrency: int | None = None, huggingface_models: list[str] | None = None) -> LLMConfig:
@@ -139,5 +141,5 @@ class LLMConfig:
             mistral=mistral,
             metacentrum=metacentrum,
             huggingface=huggingface,
-            default_concurrency=default_concurrency if default_concurrency is not None else DEFAULT_CONCURRENCY,
+            default_concurrency=default_concurrency,
         )

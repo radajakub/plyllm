@@ -10,11 +10,10 @@ from plybench.llm.client import LLMClient
 from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage, MessageRole
-from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
+from plybench.llm.response import LLMResponse
 from plybench.llm.tokens import LLMTokens
 
 AnthropicRoles = Literal["user", "assistant", "system"]
@@ -55,7 +54,7 @@ def message_tokens(usage: Usage) -> LLMTokens:
 class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
     provider_key = Provider.CLAUDE
 
-    def __init__(self, client: AsyncAnthropic, concurrency: int = 10) -> None:
+    def __init__(self, client: AsyncAnthropic, concurrency: int | None = None) -> None:
         super().__init__(claude_models(), [], concurrency)
         self._client = client
 
@@ -92,9 +91,7 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
     ) -> LLMResponse:
-        model: ClaudeLLMModel = self.resolve_model(model_name)
-        if output_schema is not None and not model.can_use_json_schema:
-            raise ValueError(f"Model {model.model_name} does not support JSON schema")
+        model: ClaudeLLMModel = self._resolve_for_generate(model_name, output_schema)
 
         params = model.extract_params(options)
         # the breakpoint sits on the system prompt, so the varying turns stay outside the cached prefix
@@ -120,9 +117,3 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
             raise self._refused(model, f"category {category}", output_text, reasoning, tokens)
 
         return self._answer(model, output_text, reasoning, tokens, output_schema)
-
-    async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
-        raise NotImplementedError("Claude embeddings are not supported in this package")
-
-    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
-        raise NotImplementedError("Claude embeddings are not supported in this package")

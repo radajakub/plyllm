@@ -13,11 +13,10 @@ from plybench.llm.client import LLMClient
 from plybench.llm.errors import FailureKind, retryable_status, status_kind
 from plybench.llm.llm_config import LLMConfig
 from plybench.llm.message import LLMMessage
-from plybench.llm.model import EmbeddingModel, EmbeddingTask
 from plybench.llm.options import LLMCallOptions
 from plybench.llm.providers.mistral.models import MistralLLMModel, mistral_models
 from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
+from plybench.llm.response import LLMResponse
 from plybench.llm.tokens import LLMTokens
 
 # MistralError covers every HTTP failure, so the status predicate below decides what is worth
@@ -75,7 +74,7 @@ def split_content(message: AssistantMessage | None) -> tuple[list[str], str]:
 class MistralLLMClient(LLMClient[MistralLLMModel]):
     provider_key = Provider.MISTRAL
 
-    def __init__(self, client: Mistral, concurrency: int = 10) -> None:
+    def __init__(self, client: Mistral, concurrency: int | None = None) -> None:
         super().__init__(mistral_models(), [], concurrency)
         self._client = client
 
@@ -112,9 +111,7 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
     ) -> LLMResponse:
-        model: MistralLLMModel = self.resolve_model(model_name)
-        if output_schema is not None and not model.can_use_json_schema:
-            raise ValueError(f"Model {model.model_name} does not support JSON schema")
+        model: MistralLLMModel = self._resolve_for_generate(model_name, output_schema)
 
         params = model.extract_params(options)
         # Mistral has no separate system field; the instructions lead the message list
@@ -140,9 +137,3 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
         reasoning, output_text = split_content(choice.message if choice is not None else None)
 
         return self._answer(model, output_text, reasoning, completion_tokens(response.usage), output_schema)
-
-    async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
-        raise NotImplementedError("Mistral embeddings are not supported in this package")
-
-    async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
-        raise NotImplementedError("Mistral embeddings are not supported in this package")
