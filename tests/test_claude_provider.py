@@ -62,7 +62,8 @@ def test_haiku_5_5_takes_the_effort_path_unlike_haiku_4_5():
 
     assert model.extract_params(LLMCallOptions(thinking_enabled=True, reasoning_effort="max"))["output_config"] == {"effort": "max"}
     assert model.extract_params(LLMCallOptions(thinking_enabled=False, reasoning_effort="high"))["thinking"] == {"type": "disabled"}
-    assert "temperature" not in model.extract_params(LLMCallOptions(thinking_enabled=False, temperature=0.3))
+    with pytest.raises(ValueError, match="does not accept temperature"):
+        model.extract_params(LLMCallOptions(thinking_enabled=False, temperature=0.3))
 
 
 def test_thinking_budget_stays_below_max_tokens():
@@ -71,13 +72,22 @@ def test_thinking_budget_stays_below_max_tokens():
     assert params["thinking"]["budget_tokens"] < params["max_tokens"]
 
 
-def test_temperature_only_forwarded_where_the_api_accepts_it():
+def test_temperature_is_forwarded_where_the_api_accepts_it_and_refused_elsewhere():
     options = LLMCallOptions(thinking_enabled=False, temperature=0.3)
 
-    assert "temperature" not in _model("claude-opus-5").extract_params(options)
     assert _model("claude-sonnet-4.6").extract_params(options)["temperature"] == 0.3
-    # sampling is rejected together with extended thinking
-    assert "temperature" not in _model("claude-haiku-4.5").extract_params(LLMCallOptions(thinking_enabled=True, temperature=0.3))
+    with pytest.raises(ValueError, match="does not accept temperature"):
+        _model("claude-opus-5").extract_params(options)
+    # the older models reject sampling together with thinking
+    with pytest.raises(ValueError, match="only with thinking disabled"):
+        _model("claude-haiku-4.5").extract_params(LLMCallOptions(thinking_enabled=True, temperature=0.3))
+
+
+def test_effort_without_thinking_only_where_the_effort_parameter_exists():
+    # Haiku 4.5 turns the effort into a thinking budget, so with thinking off it would be dropped
+    with pytest.raises(ValueError, match="only with thinking enabled"):
+        _model("claude-haiku-4.5").extract_params(LLMCallOptions(thinking_enabled=False, reasoning_effort="low"))
+    assert _model("claude-sonnet-4.6").extract_params(LLMCallOptions(thinking_enabled=False, reasoning_effort="low"))["output_config"] == {"effort": "low"}
 
 
 def test_disabling_thinking_rejected_above_high_effort():

@@ -67,10 +67,12 @@ class GeminiLLMModel(LLMModel):
                 thinking_config=thinking_config,
             )
 
+        # only the 2.5 Flash models get here (the rest are thinking_only); without a budget of 0 they still think
         return GenerateContentConfig(
             temperature=options.temperature,
             max_output_tokens=options.max_tokens,
             response_mime_type="text/plain",
+            thinking_config=ThinkingConfig(thinking_budget=0) if self.thinking else None,
         )
 
 

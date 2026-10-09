@@ -18,6 +18,12 @@ DEFAULT_EMBEDDING_BATCH_SIZE = 100
 RETIRED_MESSAGE = "Model {name} is retired: the provider no longer serves it. It stays in the registry only so recorded results still load."
 
 
+class TemperatureSupport(ExtendedEnum):
+    ALWAYS = "always"
+    WITHOUT_THINKING = "without_thinking"  # rejected while the model reasons
+    NEVER = "never"
+
+
 class EmbeddingTask(str, ExtendedEnum):
     SEARCH_QUERY = "search_query"
     SEARCH_DOCUMENT = "search_document"
@@ -94,6 +100,9 @@ class LLMModel(ABC):
         limits: ModelLimits | None = None,
         default_output_estimate: int = DEFAULT_OUTPUT_ESTIMATE,
         retired: bool = False,
+        temperature_support: TemperatureSupport = TemperatureSupport.ALWAYS,
+        effort_without_thinking: bool = False,
+        needs_effort_to_think: bool = False,
     ) -> None:
         self.model_name = model_name  # stable internal alias, used in configs/results
         self.model_string = model_string  # exact vendor id sent to the API
@@ -112,6 +121,12 @@ class LLMModel(ABC):
         self.limits = limits
         self.default_output_estimate = default_output_estimate
         self.retired = retired
+        self.temperature_support = temperature_support
+        # the effort also sets answer length, so it means something with thinking off; elsewhere it would be
+        # ignored, or would switch reasoning back on
+        self.effort_without_thinking = effort_without_thinking
+        # thinking on without an effort does not reason: the provider's default effort is no reasoning
+        self.needs_effort_to_think = needs_effort_to_think
 
     def cost(self, tokens: LLMTokens) -> float:
         uncached_cost = max(tokens.input_tokens - tokens.cached_input_tokens, 0) / MILLION * self.input_cost
@@ -135,6 +150,17 @@ class LLMModel(ABC):
                 raise ValueError(f"Model {self.model_name} does not accept a reasoning_effort")
             if options.reasoning_effort not in self.supported_reasoning:
                 raise ValueError(f"Model {self.model_name} does not support reasoning_effort {options.reasoning_effort!r}; supported: {sorted(self.supported_reasoning)}")
+            if not options.thinking_enabled and not self.effort_without_thinking:
+                raise ValueError(f"Model {self.model_name} takes a reasoning_effort only with thinking enabled")
+
+        if options.thinking_enabled and options.reasoning_effort is None and self.needs_effort_to_think:
+            raise ValueError(f"Model {self.model_name} does not reason without a reasoning_effort; set one with thinking enabled")
+
+        if options.temperature is not None:
+            if self.temperature_support is TemperatureSupport.NEVER:
+                raise ValueError(f"Model {self.model_name} does not accept temperature")
+            if self.temperature_support is TemperatureSupport.WITHOUT_THINKING and options.thinking_enabled:
+                raise ValueError(f"Model {self.model_name} accepts temperature only with thinking disabled")
 
     def validate(self, options: LLMCallOptions) -> None:
         self._validate_common(options)
