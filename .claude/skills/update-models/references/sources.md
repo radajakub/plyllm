@@ -78,6 +78,7 @@ same as standard; 3.5 Flash-Lite: 0.02), record it as `batch_cached_input_cost`.
 batch cache hits pay "the standard context caching rates", which contradicts the table for 3.8 / 3.6 Flash
 and 3.1 Flash-Lite; the table is used. 3.7 Flash and 3.5 Flash had no pricing block on 2026-10-10, so
 their cache price is 0 until the page lists one.
+
 - Model list, stable vs preview: <https://ai.google.dev/gemini-api/docs/models>
 - Deprecations and shutdown dates: <https://ai.google.dev/gemini-api/docs/deprecations>
 - Embedding task prefixes (`task:` / `title:`), verbatim: <https://ai.google.dev/gemini-api/docs/embeddings>
