@@ -1,4 +1,4 @@
-"""Token prices: the cached-input rate, and the Batch API rate that `cost(..., batch=True)` applies."""
+"""Token prices: the cached-input rate, the cache-write rate, and the Batch API rate that `cost(..., batch=True)` applies."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import pytest
 
 from plybench.llm import LLMTokens
 from plybench.llm.model import LLMModel
-from plybench.llm.providers.claude.models import claude_models
+from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
 from plybench.llm.providers.gemini.models import gemini_models
 from plybench.llm.providers.grok.models import grok_models
 from plybench.llm.providers.metacentrum.models import metacentrum_models
@@ -48,3 +48,26 @@ def test_the_standard_price_is_unchanged_by_the_batch_fields():
     for model in _ALL:
         uncached = (_TOKENS.input_tokens - _TOKENS.cached_input_tokens) / 1_000_000 * model.input_cost
         assert model.cost(_TOKENS) == pytest.approx(uncached + model.cached_input_cost + model.output_cost), model.model_name
+
+
+def test_claude_charges_cache_writes_at_a_premium_over_plain_input():
+    # claude-haiku-4.5: 1.00 input, 1.25 5-minute cache write, 0.10 cache read, 5.00 output
+    tokens = LLMTokens(input_tokens=3_000_000, cached_input_tokens=1_000_000, cache_write_tokens=1_000_000, output_tokens=1_000_000)
+
+    assert _model("claude-haiku-4.5").cost(tokens) == pytest.approx(1.0 + 0.1 + 1.25 + 5.0)
+    # the batch discount stacks with the cache multipliers
+    assert _model("claude-haiku-4.5").cost(tokens, batch=True) == pytest.approx((1.0 + 0.1 + 1.25 + 5.0) / 2)
+
+
+def test_every_claude_model_writes_its_cache_at_1_25x_input():
+    for model in claude_models():
+        assert model.cache_write_cost == pytest.approx(1.25 * model.input_cost), model.model_name
+
+
+def test_other_providers_charge_cache_writes_as_plain_input():
+    tokens = LLMTokens(input_tokens=1_000_000, cache_write_tokens=1_000_000)
+
+    for model in _ALL:
+        if isinstance(model, ClaudeLLMModel):
+            continue
+        assert model.cost(tokens) == pytest.approx(model.input_cost), model.model_name

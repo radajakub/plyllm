@@ -46,6 +46,7 @@ def message_tokens(usage: Usage) -> LLMTokens:
     return LLMTokens(
         input_tokens=usage.input_tokens + cached_tokens + cache_write_tokens,
         cached_input_tokens=cached_tokens,
+        cache_write_tokens=cache_write_tokens,
         output_tokens=usage.output_tokens,
         reasoning_tokens=usage.output_tokens_details.thinking_tokens if usage.output_tokens_details is not None else 0,
     )

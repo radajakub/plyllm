@@ -14,6 +14,9 @@ _EFFORT_NO_XHIGH: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high
 # Haiku 4.5 rejects output_config.effort; the level is translated into a thinking budget instead
 _LEGACY_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})
 
+# a 5-minute cache write costs 1.25x the base input price (1-hour writes cost 2x, but are never requested)
+_CACHE_WRITE_RATIO = 1.25
+
 _BUDGET_BY_EFFORT: dict[ReasoningEffort, int] = {
     "low": 4096,
     "medium": 8192,
@@ -58,6 +61,8 @@ class ClaudeLLMModel(LLMModel):
             effort_without_thinking=uses_effort,
             # 50% on input and output; the cache multipliers stack with it
             batch_ratio=0.5,
+            # the system prompt is cached with the default 5-minute lifetime, written at 1.25x input on every model
+            cache_write_cost=input_cost * _CACHE_WRITE_RATIO,
         )
         # uses_effort => reasoning depth is set with output_config.effort and thinking is adaptive;
         # legacy models take a numeric thinking budget instead and reject effort
