@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -23,12 +23,16 @@ DEFAULT_RETRIES = 10
 
 T = TypeVar("T")
 ModelT = TypeVar("ModelT", bound=LLMModel)
+# the SDK object a provider's generation call returns, which _parse reads
+ResponseT = TypeVar("ResponseT")
 
 
-class LLMClient(ABC, Generic[ModelT]):
+class LLMClient(ABC, Generic[ModelT, ResponseT]):
     provider_key: Provider
     # in-flight requests when the caller sets no concurrency; a provider with a tighter quota lowers it
     default_concurrency: int = DEFAULT_CONCURRENCY
+    # the SDK exceptions a failed generation may be retried on; `_should_retry_on_error` decides which instances are
+    _retry_errors: tuple[type[Exception], ...]
 
     def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int | None = None, retries: int = DEFAULT_RETRIES) -> None:
         self._models: dict[str, ModelT] = {model.model_name: model for model in models}
@@ -179,7 +183,6 @@ class LLMClient(ABC, Generic[ModelT]):
     def error_kind(self, error: Exception) -> FailureKind:
         raise NotImplementedError
 
-    @abstractmethod
     async def generate(
         self,
         model_name: str,
@@ -188,6 +191,31 @@ class LLMClient(ABC, Generic[ModelT]):
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
     ) -> LLMResponse:
+        # the same sequence for every provider. The steps are kept apart so a batch request carries exactly the
+        # body generate() sends and its results are read the same way: the same body means the same measurement
+        model = self._resolve_for_generate(model_name, output_schema)
+        kwargs = self._request(model, system, messages, options, output_schema)
+        response = await self._dispatch(model, system, messages, options, lambda: self._send(kwargs), self._retry_errors, tokens_of=self._tokens_of)
+        return self._parse(model, response, output_schema)
+
+    @abstractmethod
+    def _request(self, model: ModelT, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None) -> dict[str, Any]:
+        # the SDK call's kwargs
+        raise NotImplementedError
+
+    @abstractmethod
+    async def _send(self, kwargs: dict[str, Any]) -> ResponseT:
+        # the one SDK call generate() makes; _dispatch paces and retries it
+        raise NotImplementedError
+
+    @abstractmethod
+    def _tokens_of(self, response: ResponseT) -> int:
+        # what the rate gate charges against a tokens_per_minute quota
+        raise NotImplementedError
+
+    @abstractmethod
+    def _parse(self, model: ModelT, response: ResponseT, output_schema: type[BaseModel] | None) -> LLMResponse:
+        # the SDK's response object into an LLMResponse; raises LLMCallError for a refusal or an answer off the schema
         raise NotImplementedError
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:

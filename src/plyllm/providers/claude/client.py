@@ -52,8 +52,9 @@ def message_tokens(usage: Usage) -> LLMTokens:
     )
 
 
-class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
+class ClaudeLLMClient(LLMClient[ClaudeLLMModel, Message]):
     provider_key = Provider.CLAUDE
+    _retry_errors = _RETRY_ERRORS
 
     def __init__(self, client: AsyncAnthropic, concurrency: int | None = None) -> None:
         super().__init__(claude_models(), [], concurrency)
@@ -87,18 +88,13 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
     async def served_models(self) -> set[str]:
         return {model.id async for model in self._client.models.list()}
 
-    async def generate(
-        self,
-        model_name: str,
-        system: LLMMessage,
-        messages: list[LLMMessage],
-        options: LLMCallOptions,
-        output_schema: type[BaseModel] | None = None,
-    ) -> LLMResponse:
-        model: ClaudeLLMModel = self._resolve_for_generate(model_name, output_schema)
-
+    def _request(self, model: ClaudeLLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None) -> dict[str, Any]:
+        # the request body, apart from the call, so a batch request carries exactly what generate() sends
         params = model.extract_params(options)
-        # the breakpoint sits on the system prompt, so the varying turns stay outside the cached prefix
+        # the breakpoint sits on the system prompt, so the varying turns stay outside the cached prefix.
+        # TODO: batches use this 5-minute cache too, so both transports send the same body. The batch docs
+        # recommend the 1-hour TTL, since a batch spreads requests over a longer time and hits a 5-minute
+        # cache less often; but a 1-hour write costs more. Decide once the paid check shows the batch hit rate.
         system_blocks: list[TextBlockParam] = [{"type": "text", "text": system.content, "cache_control": {"type": "ephemeral"}}]
         contents: list[MessageParam] = [MessageParam(role=_ROLE_MAP[message.role], content=message.content) for message in messages]
 
@@ -107,10 +103,16 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel]):
             # the schema messages.parse() would send, merged with the effort setting. The answer is checked by
             # LLMClient._answer rather than inside the SDK, which would fail on a refusal before we saw it
             kwargs["output_config"] = {**kwargs.get("output_config", {}), "format": {"type": "json_schema", "schema": transform_schema(output_schema.model_json_schema())}}
+        return kwargs
 
+    async def _send(self, kwargs: dict[str, Any]) -> Message:
         # not streamed, so the client timeout caps the whole answer: raise CLAUDE_TIMEOUT for long max-effort runs
-        response = await self._dispatch(model, system, messages, options, lambda: self._client.messages.create(**kwargs), _RETRY_ERRORS, tokens_of=_total_tokens)
+        return await self._client.messages.create(**kwargs)
 
+    def _tokens_of(self, response: Message) -> int:
+        return _total_tokens(response)
+
+    def _parse(self, model: ClaudeLLMModel, response: Message, output_schema: type[BaseModel] | None) -> LLMResponse:
         output_text = _output_text(response)
         tokens = message_tokens(response.usage)
         reasoning = _thinking_summaries(response)

@@ -9,6 +9,7 @@ from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError
 
 # private: the helper responses.parse() uses to build the strict schema; a test pins it against SDK upgrades
 from openai.lib._parsing._responses import type_to_text_format_param
+from openai.types.responses import Response
 from pydantic import BaseModel
 
 from plyllm.client import DEFAULT_RETRIES, LLMClient
@@ -92,6 +93,11 @@ def _schema_instructions(system: str, output_schema: type[BaseModel]) -> str:
     )
 
 
+def _asks_in_prompt(model: MetacentrumLLMModel, output_schema: type[BaseModel] | None) -> bool:
+    # a schema this model cannot have enforced without looping is asked for in the prompt instead
+    return output_schema is not None and model.weak_structured_output
+
+
 def _json_body(text: str) -> str:
     return _FENCE.sub("", text).strip()
 
@@ -100,8 +106,9 @@ def silence_proxy_serializer_warnings() -> None:
     warnings.filterwarnings("ignore", message="Pydantic serializer warnings", category=UserWarning)
 
 
-class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
+class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel, Response]):
     provider_key = Provider.METACENTRUM
+    _retry_errors = _RETRY_ERRORS
     # the shared e-INFRA endpoint answered 429 to 10 parallel calls on 2026-10-09
     default_concurrency = 4
 
@@ -143,20 +150,12 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
     async def served_models(self) -> set[str]:
         return {model.id async for model in self._client.models.list()}
 
-    async def generate(
-        self,
-        model_name: str,
-        system: LLMMessage,
-        messages: list[LLMMessage],
-        options: LLMCallOptions,
-        output_schema: type[BaseModel] | None = None,
-    ) -> LLMResponse:
-        model: MetacentrumLLMModel = self._resolve_for_generate(model_name, output_schema)
-
+    def _request(
+        self, model: MetacentrumLLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None
+    ) -> dict[str, Any]:
         params = model.extract_params(options)
         extra_body = model.extract_extra_body(options)
-        # a schema this model cannot have enforced without looping is asked for in the prompt instead
-        ask_in_prompt = output_schema is not None and model.weak_structured_output
+        ask_in_prompt = _asks_in_prompt(model, output_schema)
         instructions = _schema_instructions(system.content, output_schema) if ask_in_prompt and output_schema else system.content
         kwargs: dict[str, Any] = dict(
             model=model.model_string,
@@ -170,12 +169,18 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel]):
             # the strict schema responses.parse() would send; the answer is checked by LLMClient._answer
             # rather than inside the SDK, so one that does not fit keeps its raw text and tokens
             kwargs["text"] = {"format": type_to_text_format_param(output_schema)}
+        return kwargs
 
-        response = await self._dispatch(model, system, messages, options, lambda: self._client.responses.create(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
+    async def _send(self, kwargs: dict[str, Any]) -> Response:
+        return await self._client.responses.create(**kwargs)
 
+    def _tokens_of(self, response: Response) -> int:
+        return responses_total_tokens(response)
+
+    def _parse(self, model: MetacentrumLLMModel, response: Response, output_schema: type[BaseModel] | None) -> LLMResponse:
         # every path strips the inline <think> block a hosted model may emit before the answer is read as JSON
         output_text, reasoning = _extract_text_and_reasoning(response)
-        if ask_in_prompt:
+        if _asks_in_prompt(model, output_schema):
             output_text = _json_body(output_text)
         tokens = responses_tokens(response.usage)
 

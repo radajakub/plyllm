@@ -72,6 +72,18 @@ class _StubClient(LLMClient):
             output_text="ok",
         )
 
+    def _request(self, model, system, messages, options, output_schema) -> dict:
+        raise NotImplementedError  # generate above calls _dispatch directly
+
+    async def _send(self, kwargs) -> None:
+        raise NotImplementedError
+
+    def _tokens_of(self, response) -> int:
+        raise NotImplementedError
+
+    def _parse(self, model, response, output_schema) -> LLMResponse:
+        raise NotImplementedError
+
     async def _api_call(self) -> int:
         self.in_flight += 1
         self.peak_in_flight = max(self.peak_in_flight, self.in_flight)

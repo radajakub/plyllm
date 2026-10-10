@@ -71,8 +71,9 @@ def split_content(message: AssistantMessage | None) -> tuple[list[str], str]:
     return reasoning, "".join(output)
 
 
-class MistralLLMClient(LLMClient[MistralLLMModel]):
+class MistralLLMClient(LLMClient[MistralLLMModel, ChatCompletionResponse]):
     provider_key = Provider.MISTRAL
+    _retry_errors = _RETRY_ERRORS
 
     def __init__(self, client: Mistral, concurrency: int | None = None, prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY) -> None:
         super().__init__(mistral_models(), [], concurrency)
@@ -108,16 +109,8 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
         cards = [model for model in listed.data or [] if isinstance(model, (BaseModelCard, FTModelCard))]
         return {name for card in cards for name in (card.id, *(card.aliases or []))}
 
-    async def generate(
-        self,
-        model_name: str,
-        system: LLMMessage,
-        messages: list[LLMMessage],
-        options: LLMCallOptions,
-        output_schema: type[BaseModel] | None = None,
-    ) -> LLMResponse:
-        model: MistralLLMModel = self._resolve_for_generate(model_name, output_schema)
-
+    def _request(self, model: MistralLLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None) -> dict[str, Any]:
+        # the request body, apart from the call, so a batch line carries exactly what generate() sends
         params = model.extract_params(options)
         # Mistral has no separate system field; the instructions lead the message list
         contents = [system.to_dict(), *(message.to_dict() for message in messages)]
@@ -127,17 +120,15 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
             # chat.parse_async() rejects the chunked content reasoning models return, so we send the
             # strict schema it would have built; LLMClient._answer checks the answer
             kwargs["response_format"] = response_format_from_pydantic_model(output_schema)
+        return kwargs
 
-        response = await self._dispatch(
-            model,
-            system,
-            messages,
-            options,
-            lambda: self._client.chat.complete_async(**kwargs),
-            _RETRY_ERRORS,
-            tokens_of=total_tokens,
-        )
+    async def _send(self, kwargs: dict[str, Any]) -> ChatCompletionResponse:
+        return await self._client.chat.complete_async(**kwargs)
 
+    def _tokens_of(self, response: ChatCompletionResponse) -> int:
+        return total_tokens(response)
+
+    def _parse(self, model: MistralLLMModel, response: ChatCompletionResponse, output_schema: type[BaseModel] | None) -> LLMResponse:
         choice = response.choices[0] if response.choices else None
         reasoning, output_text = split_content(choice.message if choice is not None else None)
 

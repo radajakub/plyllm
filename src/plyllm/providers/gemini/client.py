@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 from google import genai
 from google.genai.errors import APIError
@@ -71,8 +73,9 @@ def _embedding_tokens(response: EmbedContentResponse, texts: list[str]) -> int:
     return estimate_prompt_tokens(*texts)
 
 
-class GeminiLLMClient(LLMClient[GeminiLLMModel]):
+class GeminiLLMClient(LLMClient[GeminiLLMModel, GenerateContentResponse]):
     provider_key = Provider.GEMINI
+    _retry_errors = _RETRY_ERRORS
 
     def __init__(self, client: genai.client.AsyncClient, concurrency: int | None = None, http_client: httpx.AsyncClient | None = None) -> None:
         super().__init__(gemini_models(), gemini_embedding_models(), concurrency)
@@ -120,16 +123,8 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
     async def served_models(self) -> set[str]:
         return {model.name.removeprefix("models/") async for model in await self._client.models.list() if model.name}
 
-    async def generate(
-        self,
-        model_name: str,
-        system: LLMMessage,
-        messages: list[LLMMessage],
-        options: LLMCallOptions,
-        output_schema: type[BaseModel] | None = None,
-    ) -> LLMResponse:
-        model: GeminiLLMModel = self._resolve_for_generate(model_name, output_schema)
-
+    def _request(self, model: GeminiLLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None) -> dict[str, Any]:
+        # the request, apart from the call, so a batch request carries exactly what generate() sends
         params = model.extract_params(options)
         params.system_instruction = system.content
         if output_schema is not None:
@@ -137,17 +132,15 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
             params.response_schema = output_schema
 
         contents: list[ContentUnion] = [Content(role=_ROLE_MAP[message.role], parts=[Part(text=message.content)]) for message in messages]
+        return dict(model=model.model_string, contents=contents, config=params)
 
-        response = await self._dispatch(
-            model,
-            system,
-            messages,
-            options,
-            lambda: self._client.models.generate_content(model=model.model_string, contents=contents, config=params),
-            _RETRY_ERRORS,
-            tokens_of=_total_tokens,
-        )
+    async def _send(self, kwargs: dict[str, Any]) -> GenerateContentResponse:
+        return await self._client.models.generate_content(**kwargs)
 
+    def _tokens_of(self, response: GenerateContentResponse) -> int:
+        return _total_tokens(response)
+
+    def _parse(self, model: GeminiLLMModel, response: GenerateContentResponse, output_schema: type[BaseModel] | None) -> LLMResponse:
         usage = response.usage_metadata
         reasoning_tokens = (usage.thoughts_token_count or 0) if usage is not None else 0
         candidate_tokens = (usage.candidates_token_count or 0) if usage is not None else 0
