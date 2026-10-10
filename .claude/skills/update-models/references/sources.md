@@ -1,6 +1,6 @@
 # Provider documentation sources
 
-Where the model data in `src/plybench/llm/providers/*/models.py` comes from. Verified 2026-10-09.
+Where the model data in `src/plyllm/providers/*/models.py` comes from. Verified 2026-10-09.
 
 Fetch the pricing page and the per-model pages in parallel; the pricing pages carry every model's
 rates in one table, and the per-model pages are the only place that lists a model's exact set of
@@ -114,7 +114,7 @@ API returns 404 for this account ("does not exist or your team does not have acc
 update, check whether they are served now (free, needs `GROK_API_KEY`):
 
 ```
-uv run python -c "import asyncio; from plybench.llm import LLM, LLMConfig, Provider; print(sorted(asyncio.run(LLM(LLMConfig.from_env()).served_models(Provider.GROK))))"
+uv run python -c "import asyncio; from plyllm import LLM, LLMConfig, Provider; print(sorted(asyncio.run(LLM(LLMConfig.from_env()).served_models(Provider.GROK))))"
 ```
 
 If the list contains them, add them back with the values from their model pages (on 2026-10-09:
@@ -149,14 +149,14 @@ the Large 4 page; read the pricing table from raw HTML (`curl`) when in doubt.
 ## Metacentrum / e-INFRA (`metacentrum`)
 
 - Served models, API ids, aliases, obsolete models: <https://docs.cerit.io/en/docs/ai-as-a-service/chat-ai>
-- API base URL: `https://llm.ai.e-infra.cz/v1/` (set locally through `OS_BASE_URL` / `OS_API_KEY`)
+- API base URL: `https://llm.ai.e-infra.cz/v1/` (set locally through `METACENTRUM_BASE_URL` / `METACENTRUM_API_KEY`)
 
 Repository notes: self-hosted and free, so every model carries `input_cost=0` / `output_cost=0`.
 The service replaces models without notice and the page has a separate "Obsolete Models" table —
 check it, not just the main table. The page can lag the live endpoint (on 2026-10-07 it still read
 "Effective June 30, 2026" and listed `deepseek-v4-flash`, while `/v1/models` served
 `deepseek-v4.1-flash` from 2026-09-28). Prefer `GET https://llm.ai.e-infra.cz/v1/models` (free,
-needs `OS_API_KEY`) and ask before calling it. Models it drops are **kept** in `models.py`
+needs `METACENTRUM_API_KEY`) and ask before calling it. Models it drops are **kept** in `models.py`
 and marked `retired=True`, so existing experiment configs and recorded results still resolve and
 cost (`resolve_model` raises on an unknown name) while new calls are refused. `make test-models`
 (free, needs the keys in .env) compares every provider's active registry models with its served list
@@ -194,5 +194,5 @@ make test-models   # free: are all active models still served? Needs the keys in
 Then check the prices and effort sets round-trip:
 
 ```
-uv run python -c "from plybench.llm.providers.claude.models import claude_models; print([(m.model_name, m.input_cost, m.output_cost) for m in claude_models()])"
+uv run python -c "from plyllm.providers.claude.models import claude_models; print([(m.model_name, m.input_cost, m.output_cost) for m in claude_models()])"
 ```

@@ -20,7 +20,7 @@ from typing import Any, TypeVar
 import pytest
 from pydantic import BaseModel
 
-from plybench.llm import (
+from plyllm import (
     LLM,
     ClaudeProviderConfig,
     GeminiProviderConfig,

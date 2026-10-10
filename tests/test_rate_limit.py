@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from plybench.llm.rate_limit import ModelGate, ModelLimits, NoLimits, estimate_prompt_tokens, make_gate
+from plyllm.rate_limit import ModelGate, ModelLimits, NoLimits, estimate_prompt_tokens, make_gate
 
 
 class FakeClock:

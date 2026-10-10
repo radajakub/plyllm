@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from plybench.llm import LLMTokens
-from plybench.llm.model import LLMModel
-from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
-from plybench.llm.providers.gemini.models import gemini_models
-from plybench.llm.providers.grok.models import grok_models
-from plybench.llm.providers.metacentrum.models import metacentrum_models
-from plybench.llm.providers.mistral.models import mistral_models
-from plybench.llm.providers.openai.models import openai_models
+from plyllm import LLMTokens
+from plyllm.model import LLMModel
+from plyllm.providers.claude.models import ClaudeLLMModel, claude_models
+from plyllm.providers.gemini.models import gemini_models
+from plyllm.providers.grok.models import grok_models
+from plyllm.providers.metacentrum.models import metacentrum_models
+from plyllm.providers.mistral.models import mistral_models
+from plyllm.providers.openai.models import openai_models
 
 _ALL: list[LLMModel] = [*openai_models(), *gemini_models(), *grok_models(), *claude_models(), *mistral_models(), *metacentrum_models()]
 # a million of each, so a cost reads directly as the sum of the per-1M prices

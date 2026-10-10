@@ -16,14 +16,14 @@ from mistralai.client import Mistral
 from mistralai.client.models import BaseModelCard, FTModelCard
 from openai import AsyncOpenAI
 
-from plybench.llm import LLM, HuggingFaceProviderConfig, LLMConfig, OpenAIProviderConfig, Provider
-from plybench.llm.providers.claude.client import ClaudeLLMClient
-from plybench.llm.providers.gemini.client import GeminiLLMClient
-from plybench.llm.providers.grok.client import GrokLLMClient
-from plybench.llm.providers.huggingface.client import HuggingFaceLLMClient
-from plybench.llm.providers.metacentrum.client import MetacentrumLLMClient
-from plybench.llm.providers.mistral.client import MistralLLMClient
-from plybench.llm.providers.openai.client import OpenAILLMClient
+from plyllm import LLM, HuggingFaceProviderConfig, LLMConfig, OpenAIProviderConfig, Provider
+from plyllm.providers.claude.client import ClaudeLLMClient
+from plyllm.providers.gemini.client import GeminiLLMClient
+from plyllm.providers.grok.client import GrokLLMClient
+from plyllm.providers.huggingface.client import HuggingFaceLLMClient
+from plyllm.providers.metacentrum.client import MetacentrumLLMClient
+from plyllm.providers.mistral.client import MistralLLMClient
+from plyllm.providers.openai.client import OpenAILLMClient
 
 
 class _Pager:

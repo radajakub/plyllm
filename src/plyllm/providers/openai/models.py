@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel, TemperatureSupport
-from plybench.llm.options import LLMCallOptions, ReasoningEffort
+from plyllm.model import EmbeddingModel, EmbeddingTask, LLMModel, TemperatureSupport
+from plyllm.options import LLMCallOptions, ReasoningEffort
 
 # GPT-5.4 / 5.5 standard models (docs also list none, which is what thinking off sends)
 _GPT5_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh"})

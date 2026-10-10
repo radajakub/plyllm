@@ -3,11 +3,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from plybench.llm.options import LLMCallOptions, ReasoningEffort
-from plybench.llm.rate_limit import ModelLimits, estimate_prompt_tokens
-from plybench.llm.tokens import EmbeddingTokens, LLMTokens
-from plybench.utils.const import MILLION
-from plybench.utils.enums import ExtendedEnum
+from plyllm.options import LLMCallOptions, ReasoningEffort
+from plyllm.rate_limit import ModelLimits, estimate_prompt_tokens
+from plyllm.tokens import EmbeddingTokens, LLMTokens
+from plyllm.utils import MILLION, ExtendedEnum
 
 # output-side token guess used to size a rate reservation when the caller sets no max_tokens; only
 # consulted for models that carry a tokens_per_minute quota
@@ -141,7 +140,7 @@ class LLMModel(ABC):
     def cost(self, tokens: LLMTokens, batch: bool = False) -> float:
         # TODO: long-prompt price tiers. Claude Haiku 5.5 (over 100k prompt tokens) and the Gemini Pro models
         # (over 200k) bill the whole request at a higher rate; only the lower tier is stored, so such a request
-        # is under-costed. Game prompts stay far below both thresholds.
+        # is under-costed.
         input_cost, cached_input_cost, output_cost = self.input_cost, self.cached_input_cost, self.output_cost
         cache_write_cost = self.cache_write_cost if self.cache_write_cost is not None else input_cost
         if batch:

@@ -11,6 +11,9 @@ DEFAULT_CONCURRENCY = 10
 # seconds one request may take before the SDK gives up and our retry layer takes over; long enough for
 # a slow thinking trace, short enough that a stalled connection does not hang a run forever
 DEFAULT_TIMEOUT = 600.0
+# sent with every request to the providers that take one (OpenAI, Grok, Mistral): requests that share a key
+# and a prompt prefix are routed to the same cache, so a shared system prompt is read from it
+DEFAULT_PROMPT_CACHE_KEY = "PlyLLM"
 
 
 @dataclass(frozen=True)
@@ -77,9 +80,10 @@ class LLMConfig:
     huggingface: HuggingFaceProviderConfig | None = None
     # None lets each provider use its own default (LLMClient.default_concurrency)
     default_concurrency: int | None = None
+    prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY
 
     @classmethod
-    def from_env(cls, default_concurrency: int | None = None, huggingface_models: list[str] | None = None) -> LLMConfig:
+    def from_env(cls, default_concurrency: int | None = None, huggingface_models: list[str] | None = None, prompt_cache_key: str | None = None) -> LLMConfig:
         # merge process env with a local .env file (env takes precedence)
         values: dict[str, str | None] = {**dotenv_values(), **os.environ}
 
@@ -118,8 +122,8 @@ class LLMConfig:
             mistral = MistralProviderConfig(api_key=mistral_key, timeout=timeout("MISTRAL"))
 
         metacentrum = None
-        meta_key = get("METACENTRUM_API_KEY") or get("OS_API_KEY")
-        meta_url = get("METACENTRUM_BASE_URL") or get("OS_BASE_URL")
+        meta_key = get("METACENTRUM_API_KEY")
+        meta_url = get("METACENTRUM_BASE_URL")
         if meta_key is not None and meta_url is not None:
             metacentrum = MetacentrumProviderConfig(
                 api_key=meta_key,
@@ -142,4 +146,6 @@ class LLMConfig:
             metacentrum=metacentrum,
             huggingface=huggingface,
             default_concurrency=default_concurrency,
+            # an argument wins over PROMPT_CACHE_KEY in the environment
+            prompt_cache_key=prompt_cache_key or get("PROMPT_CACHE_KEY") or DEFAULT_PROMPT_CACHE_KEY,
         )

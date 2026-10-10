@@ -3,14 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import cast, get_args
 
-from plybench.llm.options import LLMCallOptions, ReasoningEffort
-from plybench.llm.providers.providers import Provider
-from plybench.utils.text import extract_params, to_bool
+from plyllm.options import LLMCallOptions, ReasoningEffort
+from plyllm.providers.providers import Provider
+from plyllm.utils import extract_params, to_bool
 
 
 def _reasoning_effort(value: str | None) -> ReasoningEffort | None:
-    """A typo in a config string used to reach the provider unchecked and come back as an opaque API
-    error. The effort levels are a closed set, so it is caught here instead."""
     if value is None:
         return None
     if value not in get_args(ReasoningEffort):
@@ -49,9 +47,9 @@ class ModelConfig:
 
     @classmethod
     def from_string(cls, text: str) -> ModelConfig:
-        """`<provider>:<model>[:<options>]` -- the tail of a player config, and the same syntax. A judge is
-        configured the way a player is, so `reasoning_effort=high` means the same thing in both places and
-        one string carries what three flags used to."""
+        """`<provider>:<model>[:<options>]`, e.g. `openai:gpt-5.5:thinking_enabled=True,reasoning_effort=high`.
+        The options are comma-separated `key=value` pairs (see `parse_options`); without them the model's
+        defaults apply."""
         provider_key, _, rest = text.partition(":")
         model_name, _, options = rest.partition(":")
         provider = Provider.from_value(provider_key)
@@ -66,7 +64,6 @@ class ModelConfig:
 
     @property
     def slug(self) -> str:
-        """Filesystem-safe identity, matching how player configs name their result directories."""
         return self.to_string().replace(":", "_").replace("=", "_").replace(",", "_").replace(".", "-")
 
 

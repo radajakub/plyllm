@@ -1,5 +1,6 @@
 """Behaviour every provider client gets from `LLMClient` rather than implementing itself: the JSON-schema
-check before a call, the error for a provider without embeddings, and the per-provider concurrency default."""
+check before a call, the error for a provider without embeddings, the per-provider concurrency default, and the
+prompt cache key."""
 
 from __future__ import annotations
 
@@ -8,7 +9,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from plybench.llm import (
+from plyllm import (
     LLM,
     ClaudeProviderConfig,
     EmbeddingModelConfig,
@@ -23,11 +24,12 @@ from plybench.llm import (
     OpenAIProviderConfig,
     Provider,
 )
-from plybench.llm.providers.claude.client import ClaudeLLMClient
-from plybench.llm.providers.gemini.client import GeminiLLMClient
-from plybench.llm.providers.grok.client import GrokLLMClient
-from plybench.llm.providers.metacentrum.client import MetacentrumLLMClient
-from plybench.llm.providers.openai.client import OpenAILLMClient
+from plyllm.providers.claude.client import ClaudeLLMClient
+from plyllm.providers.gemini.client import GeminiLLMClient
+from plyllm.providers.grok.client import GrokLLMClient
+from plyllm.providers.metacentrum.client import MetacentrumLLMClient
+from plyllm.providers.mistral.client import MistralLLMClient
+from plyllm.providers.openai.client import OpenAILLMClient
 
 _GENERATING = [Provider.OPENAI, Provider.GEMINI, Provider.GROK, Provider.CLAUDE, Provider.MISTRAL, Provider.METACENTRUM]
 
@@ -93,3 +95,33 @@ def test_aclose_closes_every_providers_connection_pool():
         assert client._client.is_closed(), client.provider_key
     gemini = clients[Provider.GEMINI]
     assert isinstance(gemini, GeminiLLMClient) and gemini._http_client is not None and gemini._http_client.is_closed
+
+
+def test_the_prompt_cache_key_defaults_to_plyllm(monkeypatch):
+    # an empty value counts as unset, so a PROMPT_CACHE_KEY in a local .env cannot leak in
+    monkeypatch.setenv("PROMPT_CACHE_KEY", "")
+
+    assert LLMConfig.from_env().prompt_cache_key == "PlyLLM"
+
+
+def test_the_prompt_cache_key_comes_from_the_environment_unless_given(monkeypatch):
+    monkeypatch.setenv("PROMPT_CACHE_KEY", "from-env")
+
+    assert LLMConfig.from_env().prompt_cache_key == "from-env"
+    assert LLMConfig.from_env(prompt_cache_key="from-argument").prompt_cache_key == "from-argument"
+
+
+def test_every_provider_that_takes_a_prompt_cache_key_gets_the_configured_one():
+    llm = LLM(
+        LLMConfig(
+            openai=OpenAIProviderConfig(api_key="test"),
+            grok=GrokProviderConfig(api_key="test"),
+            mistral=MistralProviderConfig(api_key="test"),
+            prompt_cache_key="experiment-7",
+        )
+    )
+
+    for provider in (Provider.OPENAI, Provider.GROK, Provider.MISTRAL):
+        client = llm._provider_map[provider]
+        assert isinstance(client, OpenAILLMClient | GrokLLMClient | MistralLLMClient)
+        assert client._prompt_cache_key == "experiment-7", provider

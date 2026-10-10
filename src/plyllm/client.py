@@ -7,16 +7,16 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from plybench.llm.concurrency import ProviderSemaphore, safe_call
-from plybench.llm.errors import FailureKind, LLMCallError, as_call_error
-from plybench.llm.llm_config import DEFAULT_CONCURRENCY, LLMConfig
-from plybench.llm.message import LLMMessage
-from plybench.llm.model import RETIRED_MESSAGE, EmbeddingModel, EmbeddingTask, LLMModel
-from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.providers import Provider
-from plybench.llm.rate_limit import ModelLimits, RateGate, estimate_prompt_tokens, make_gate
-from plybench.llm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
-from plybench.llm.tokens import EmbeddingTokens, LLMTokens
+from plyllm.concurrency import ProviderSemaphore, safe_call
+from plyllm.errors import FailureKind, LLMCallError, as_call_error
+from plyllm.llm_config import DEFAULT_CONCURRENCY, LLMConfig
+from plyllm.message import LLMMessage
+from plyllm.model import RETIRED_MESSAGE, EmbeddingModel, EmbeddingTask, LLMModel
+from plyllm.options import LLMCallOptions
+from plyllm.providers.providers import Provider
+from plyllm.rate_limit import ModelLimits, RateGate, estimate_prompt_tokens, make_gate
+from plyllm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
+from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 # `safe_call` keeps this as its own default; naming it here is what lets a client lower it
 DEFAULT_RETRIES = 10

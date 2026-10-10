@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from plybench.llm.model import LLMModel, TemperatureSupport
-from plybench.llm.options import LLMCallOptions, ReasoningEffort
+from plyllm.model import LLMModel, TemperatureSupport
+from plyllm.options import LLMCallOptions, ReasoningEffort
 
 # grok-4.5 accepts reasoning_effort of low / medium / high (xhigh is silently treated as high); grok-4.3 adds none,
 # which is what thinking off sends

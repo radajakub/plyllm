@@ -5,25 +5,25 @@ import importlib
 
 from pydantic import BaseModel
 
-from plybench.llm.client import LLMClient
-from plybench.llm.llm_config import LLMConfig
-from plybench.llm.message import LLMMessage
-from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
-from plybench.llm.model_config import EmbeddingModelConfig, ModelConfig
-from plybench.llm.providers.providers import Provider
-from plybench.llm.rate_limit import ModelLimits
-from plybench.llm.response import EmbeddingResponse, LLMResponse
-from plybench.llm.tokens import EmbeddingTokens, LLMTokens
+from plyllm.client import LLMClient
+from plyllm.llm_config import LLMConfig
+from plyllm.message import LLMMessage
+from plyllm.model import EmbeddingModel, EmbeddingTask, LLMModel
+from plyllm.model_config import EmbeddingModelConfig, ModelConfig
+from plyllm.providers.providers import Provider
+from plyllm.rate_limit import ModelLimits
+from plyllm.response import EmbeddingResponse, LLMResponse
+from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 # Each provider SDK is an optional extra. Import a provider only when it is configured.
 _CLIENT_MODULES = (
-    (Provider.OPENAI, "plybench.llm.providers.openai.client", "OpenAILLMClient"),
-    (Provider.GEMINI, "plybench.llm.providers.gemini.client", "GeminiLLMClient"),
-    (Provider.GROK, "plybench.llm.providers.grok.client", "GrokLLMClient"),
-    (Provider.CLAUDE, "plybench.llm.providers.claude.client", "ClaudeLLMClient"),
-    (Provider.MISTRAL, "plybench.llm.providers.mistral.client", "MistralLLMClient"),
-    (Provider.METACENTRUM, "plybench.llm.providers.metacentrum.client", "MetacentrumLLMClient"),
-    (Provider.HUGGINGFACE, "plybench.llm.providers.huggingface.client", "HuggingFaceLLMClient"),
+    (Provider.OPENAI, "plyllm.providers.openai.client", "OpenAILLMClient"),
+    (Provider.GEMINI, "plyllm.providers.gemini.client", "GeminiLLMClient"),
+    (Provider.GROK, "plyllm.providers.grok.client", "GrokLLMClient"),
+    (Provider.CLAUDE, "plyllm.providers.claude.client", "ClaudeLLMClient"),
+    (Provider.MISTRAL, "plyllm.providers.mistral.client", "MistralLLMClient"),
+    (Provider.METACENTRUM, "plyllm.providers.metacentrum.client", "MetacentrumLLMClient"),
+    (Provider.HUGGINGFACE, "plyllm.providers.huggingface.client", "HuggingFaceLLMClient"),
 )
 
 

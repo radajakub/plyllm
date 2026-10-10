@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from plybench.llm import LLM, EmbeddingTask, HuggingFaceProviderConfig, LLMCallOptions, LLMConfig, LLMMessage, Provider
-from plybench.llm.providers.huggingface.client import HuggingFaceLLMClient
+from plyllm import LLM, EmbeddingTask, HuggingFaceProviderConfig, LLMCallOptions, LLMConfig, LLMMessage, Provider
+from plyllm.providers.huggingface.client import HuggingFaceLLMClient
 
 
 def test_from_env_builds_hf_config_only_when_models_given(monkeypatch):

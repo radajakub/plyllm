@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from plybench.llm.model import EmbeddingModel, EmbeddingTask
+from plyllm.model import EmbeddingModel, EmbeddingTask
 
 
 class HuggingFaceEmbeddingModel(EmbeddingModel):

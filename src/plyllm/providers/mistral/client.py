@@ -9,15 +9,15 @@ from mistralai.client.models import AssistantMessage, BaseModelCard, ChatComplet
 from mistralai.extra import response_format_from_pydantic_model
 from pydantic import BaseModel
 
-from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind, retryable_status, status_kind
-from plybench.llm.llm_config import LLMConfig
-from plybench.llm.message import LLMMessage
-from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.mistral.models import MistralLLMModel, mistral_models
-from plybench.llm.providers.providers import Provider
-from plybench.llm.response import LLMResponse
-from plybench.llm.tokens import LLMTokens
+from plyllm.client import LLMClient
+from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.llm_config import DEFAULT_PROMPT_CACHE_KEY, LLMConfig
+from plyllm.message import LLMMessage
+from plyllm.options import LLMCallOptions
+from plyllm.providers.mistral.models import MistralLLMModel, mistral_models
+from plyllm.providers.providers import Provider
+from plyllm.response import LLMResponse
+from plyllm.tokens import LLMTokens
 
 # MistralError covers every HTTP failure, so the status predicate below decides what is worth
 # retrying; NoResponseError and httpx failures are transport-level and always are
@@ -74,9 +74,10 @@ def split_content(message: AssistantMessage | None) -> tuple[list[str], str]:
 class MistralLLMClient(LLMClient[MistralLLMModel]):
     provider_key = Provider.MISTRAL
 
-    def __init__(self, client: Mistral, concurrency: int | None = None) -> None:
+    def __init__(self, client: Mistral, concurrency: int | None = None, prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY) -> None:
         super().__init__(mistral_models(), [], concurrency)
         self._client = client
+        self._prompt_cache_key = prompt_cache_key
 
     @classmethod
     def build(cls, config: LLMConfig) -> MistralLLMClient | None:
@@ -84,7 +85,7 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
             return None
         # the SDK defaults to 300s per request, which a long thinking trace can exceed
         client = Mistral(api_key=config.mistral.api_key, timeout_ms=int(config.mistral.timeout * 1000))
-        return cls(client, config.default_concurrency)
+        return cls(client, config.default_concurrency, config.prompt_cache_key)
 
     def _should_retry_on_error(self, error: Exception) -> bool:
         return isinstance(error, _RETRY_ERRORS) and _is_retryable(error)
@@ -121,7 +122,7 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
         # Mistral has no separate system field; the instructions lead the message list
         contents = [system.to_dict(), *(message.to_dict() for message in messages)]
 
-        kwargs: dict[str, Any] = dict(model=model.model_string, messages=contents, prompt_cache_key="PlyBench", **params)
+        kwargs: dict[str, Any] = dict(model=model.model_string, messages=contents, prompt_cache_key=self._prompt_cache_key, **params)
         if output_schema is not None:
             # chat.parse_async() rejects the chunked content reasoning models return, so we send the
             # strict schema it would have built; LLMClient._answer checks the answer

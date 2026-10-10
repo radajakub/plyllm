@@ -6,15 +6,15 @@ from anthropic import APIConnectionError, APIError, APIStatusError, APITimeoutEr
 from anthropic.types import Message, MessageParam, TextBlockParam, Usage
 from pydantic import BaseModel
 
-from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind, retryable_status, status_kind
-from plybench.llm.llm_config import LLMConfig
-from plybench.llm.message import LLMMessage, MessageRole
-from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
-from plybench.llm.providers.providers import Provider
-from plybench.llm.response import LLMResponse
-from plybench.llm.tokens import LLMTokens
+from plyllm.client import LLMClient
+from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.llm_config import LLMConfig
+from plyllm.message import LLMMessage, MessageRole
+from plyllm.options import LLMCallOptions
+from plyllm.providers.claude.models import ClaudeLLMModel, claude_models
+from plyllm.providers.providers import Provider
+from plyllm.response import LLMResponse
+from plyllm.tokens import LLMTokens
 
 AnthropicRoles = Literal["user", "assistant", "system"]
 

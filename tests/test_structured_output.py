@@ -23,12 +23,12 @@ from openai import AsyncOpenAI
 from openai.lib._parsing._responses import type_to_text_format_param
 from pydantic import BaseModel
 
-from plybench.llm import ClaudeProviderConfig, FailureKind, LLMCallError, LLMCallOptions, LLMConfig, LLMMessage, LLMResponse, LLMTokens
-from plybench.llm.llm_config import DEFAULT_TIMEOUT
-from plybench.llm.providers.claude.client import ClaudeLLMClient
-from plybench.llm.providers.gemini.client import GeminiLLMClient
-from plybench.llm.providers.openai.client import OpenAILLMClient
-from plybench.llm.providers.openai.models import openai_models
+from plyllm import ClaudeProviderConfig, FailureKind, LLMCallError, LLMCallOptions, LLMConfig, LLMMessage, LLMResponse, LLMTokens
+from plyllm.llm_config import DEFAULT_TIMEOUT
+from plyllm.providers.claude.client import ClaudeLLMClient
+from plyllm.providers.gemini.client import GeminiLLMClient
+from plyllm.providers.openai.client import OpenAILLMClient
+from plyllm.providers.openai.models import openai_models
 
 
 class _Move(BaseModel):
@@ -237,7 +237,7 @@ def test_a_built_claude_client_sends_long_requests_without_streaming(monkeypatch
     def with_mock_transport(**kwargs):
         return real(**kwargs, http_client=httpx.AsyncClient(transport=httpx.MockTransport(recorder)))
 
-    monkeypatch.setattr("plybench.llm.providers.claude.client.AsyncAnthropic", with_mock_transport)
+    monkeypatch.setattr("plyllm.providers.claude.client.AsyncAnthropic", with_mock_transport)
     client = ClaudeLLMClient.build(LLMConfig(claude=ClaudeProviderConfig(api_key="test")))
     assert client is not None
 

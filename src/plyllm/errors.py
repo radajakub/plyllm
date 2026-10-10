@@ -4,8 +4,8 @@ from collections.abc import Callable
 
 from pydantic import ValidationError
 
-from plybench.llm.response import LLMResponse
-from plybench.utils.enums import ExtendedEnum
+from plyllm.response import LLMResponse
+from plyllm.utils import ExtendedEnum
 
 
 class FailureKind(ExtendedEnum):

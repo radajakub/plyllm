@@ -14,9 +14,9 @@ import warnings
 import pytest
 from pydantic import BaseModel, Field
 
-from plybench.llm import LLMCallOptions
-from plybench.llm.providers.metacentrum.client import _json_body, _schema_instructions, silence_proxy_serializer_warnings
-from plybench.llm.providers.metacentrum.models import metacentrum_models
+from plyllm import LLMCallOptions, LLMConfig
+from plyllm.providers.metacentrum.client import _json_body, _schema_instructions, silence_proxy_serializer_warnings
+from plyllm.providers.metacentrum.models import metacentrum_models
 
 
 class Label(BaseModel):
@@ -30,6 +30,20 @@ class Answer(BaseModel):
 
 def _model(name: str):
     return next(model for model in metacentrum_models() if model.model_name == name)
+
+
+def test_from_env_reads_the_metacentrum_variables_only(monkeypatch):
+    # the old OS_* names are no longer read; empty values count as unset, so a local .env cannot leak in
+    monkeypatch.setenv("METACENTRUM_API_KEY", "")
+    monkeypatch.setenv("METACENTRUM_BASE_URL", "")
+    monkeypatch.setenv("OS_API_KEY", "old-key")
+    monkeypatch.setenv("OS_BASE_URL", "https://old.invalid/v1")
+    assert LLMConfig.from_env().metacentrum is None
+
+    monkeypatch.setenv("METACENTRUM_API_KEY", "mc-test")
+    monkeypatch.setenv("METACENTRUM_BASE_URL", "https://llm.invalid/v1")
+    config = LLMConfig.from_env().metacentrum
+    assert config is not None and config.api_key == "mc-test" and config.base_url == "https://llm.invalid/v1"
 
 
 def test_the_models_that_cannot_have_a_schema_enforced_are_marked():
