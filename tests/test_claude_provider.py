@@ -119,6 +119,7 @@ def test_message_tokens_folds_cache_counters_into_input_tokens():
 
     assert tokens.input_tokens == 200
     assert tokens.cached_input_tokens == 60
+    assert tokens.cache_write_tokens == 40
     assert tokens.output_tokens == 500
     assert tokens.reasoning_tokens == 300
 

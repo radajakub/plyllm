@@ -28,8 +28,13 @@ listed for the others, which get `None`), Metacentrum `None` (free). Batch: Open
 `docs.claude.com/en/docs/...` 302-redirects to `platform.claude.com/docs/en/...`; fetch the
 `platform.claude.com` URL directly to save a round trip.
 
-Repository notes: `cached_input_cost` is the cache-read rate, normally 0.1x input but 0.025x on
-Fable 5.1 and 0.05x on Opus 5.5 and Sonnet 5.5. The models endpoint lists some older models only by dated snapshot (`claude-haiku-4-5-20251001`,
+Repository notes: `cache_write_cost` is the 5-minute cache-write rate, 1.25x input on every model
+(`_CACHE_WRITE_RATIO`); the client caches the system prompt with the default 5-minute lifetime, so the
+1-hour rate (2x) is not stored. `cached_input_cost` is the cache-read rate, normally 0.1x input but 0.025x on
+Fable 5.1 and 0.05x on Opus 5.5 and Sonnet 5.5. `cache_write_cost` is the 5-minute cache-write rate,
+1.25x input on every model (`_CACHE_WRITE_RATIO`); the client caches the system prompt with the default
+5-minute lifetime, so the 1-hour rate (2x) is never charged. The pricing page says the batch discount
+stacks with both cache multipliers. The models endpoint lists some older models only by dated snapshot (`claude-haiku-4-5-20251001`,
 `claude-opus-4-5-20251101`, `claude-sonnet-4-5-20250929`), not by alias, so use the snapshot there. Haiku 5.5 has two price tiers (prompts up to / over
 100k tokens); the repository stores the lower one. "Adaptive (always on)" in the docs maps to `thinking_only=True`.
 Models whose docs say thinking cannot be disabled at any effort are `thinking_only`; Opus 5 can only

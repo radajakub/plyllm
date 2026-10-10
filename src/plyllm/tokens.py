@@ -7,6 +7,8 @@ from dataclasses import dataclass
 class LLMTokens:
     input_tokens: int = 0
     cached_input_tokens: int = 0
+    # cache_write_tokens is the subset of input_tokens written to a prompt cache (only Claude charges extra for it)
+    cache_write_tokens: int = 0
     output_tokens: int = 0
     # reasoning_tokens is the reasoning subset of output_tokens (output_tokens is the full completion)
     reasoning_tokens: int = 0
@@ -15,6 +17,7 @@ class LLMTokens:
         return LLMTokens(
             input_tokens=self.input_tokens + other.input_tokens,
             cached_input_tokens=self.cached_input_tokens + other.cached_input_tokens,
+            cache_write_tokens=self.cache_write_tokens + other.cache_write_tokens,
             output_tokens=self.output_tokens + other.output_tokens,
             reasoning_tokens=self.reasoning_tokens + other.reasoning_tokens,
         )

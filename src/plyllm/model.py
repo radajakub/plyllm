@@ -105,6 +105,7 @@ class LLMModel(ABC):
         needs_effort_to_think: bool = False,
         batch_ratio: float | None = None,
         batch_cached_input_cost: float | None = None,
+        cache_write_cost: float | None = None,
     ) -> None:
         self.model_name = model_name  # stable internal alias, used in configs/results
         self.model_string = model_string  # exact vendor id sent to the API
@@ -112,6 +113,8 @@ class LLMModel(ABC):
         self.input_cost = input_cost  # USD per 1M input tokens
         self.output_cost = output_cost  # USD per 1M output tokens
         self.cached_input_cost = cached_input_cost  # USD per 1M input tokens
+        # USD per 1M input tokens written to a prompt cache; None when writing costs the same as plain input
+        self.cache_write_cost = cache_write_cost
 
         self.thinking = thinking  # if the model supports thinking
         self.thinking_only = thinking_only  # if the model only supports thinking
@@ -137,16 +140,19 @@ class LLMModel(ABC):
 
     def cost(self, tokens: LLMTokens, batch: bool = False) -> float:
         input_cost, cached_input_cost, output_cost = self.input_cost, self.cached_input_cost, self.output_cost
+        cache_write_cost = self.cache_write_cost if self.cache_write_cost is not None else input_cost
         if batch:
             if self.batch_ratio is None:
                 raise ValueError(f"Model {self.model_name} has no batch price")
             input_cost, output_cost = input_cost * self.batch_ratio, output_cost * self.batch_ratio
             cached_input_cost = self.batch_cached_input_cost if self.batch_cached_input_cost is not None else cached_input_cost * self.batch_ratio
+            cache_write_cost = cache_write_cost * self.batch_ratio
 
-        uncached = max(tokens.input_tokens - tokens.cached_input_tokens, 0) / MILLION * input_cost
+        uncached = max(tokens.input_tokens - tokens.cached_input_tokens - tokens.cache_write_tokens, 0) / MILLION * input_cost
         cached = tokens.cached_input_tokens / MILLION * cached_input_cost
+        written = tokens.cache_write_tokens / MILLION * cache_write_cost
         output = tokens.output_tokens / MILLION * output_cost
-        return uncached + cached + output
+        return uncached + cached + written + output
 
     def _validate_common(self, options: LLMCallOptions) -> None:
         # validation to verify that the options are compatible with the model
