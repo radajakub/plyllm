@@ -8,22 +8,22 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind
-from plybench.llm.llm_config import HuggingFaceProviderConfig, LLMConfig
-from plybench.llm.message import LLMMessage
-from plybench.llm.model import EmbeddingModel
-from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.huggingface.models import huggingface_embedding_models
-from plybench.llm.providers.providers import Provider
-from plybench.llm.response import EmbeddingBatch, LLMResponse
-from plybench.llm.tokens import EmbeddingTokens
+from plyllm.client import LLMClient
+from plyllm.errors import FailureKind
+from plyllm.llm_config import HuggingFaceProviderConfig, LLMConfig
+from plyllm.message import LLMMessage
+from plyllm.model import EmbeddingModel
+from plyllm.options import LLMCallOptions
+from plyllm.providers.huggingface.models import huggingface_embedding_models
+from plyllm.providers.providers import Provider
+from plyllm.response import EmbeddingBatch, LLMResponse
+from plyllm.tokens import EmbeddingTokens
 
 if TYPE_CHECKING:
     import torch
     from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-_MISSING_EXTRA = "HuggingFace provider requires the 'huggingface' extra. Install it with: pip install plybench[huggingface]"
+_MISSING_EXTRA = "HuggingFace provider requires the 'huggingface' extra. Install it with: pip install plyllm[huggingface]"
 
 
 def _import_torch() -> tuple[ModuleType, ModuleType]:
@@ -119,7 +119,7 @@ class HuggingFaceLLMClient(LLMClient):
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         if model.model_name not in self._verified:
             raise ValueError(
-                f"HuggingFace model '{model.model_name}' has not been verified. Add it to hf_models=[...] in your PlyBench(...) bootstrap so it is downloaded and verified before use."
+                f"HuggingFace model '{model.model_name}' has not been verified. Add it to huggingface_models=[...] in LLMConfig.from_env(...) and call LLM.bootstrap(), so it is downloaded and verified before use."
             )
         return await self._dispatch_embedding(model, texts, lambda: asyncio.to_thread(self._embed_sync, model, texts), ())
 

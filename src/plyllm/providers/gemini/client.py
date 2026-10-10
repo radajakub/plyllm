@@ -6,17 +6,17 @@ from google.genai.errors import APIError
 from google.genai.types import Content, ContentUnion, EmbedContentConfig, EmbedContentResponse, FinishReason, GenerateContentResponse, HttpOptions, Part
 from pydantic import BaseModel
 
-from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind, retryable_status, status_kind
-from plybench.llm.llm_config import LLMConfig
-from plybench.llm.message import LLMMessage
-from plybench.llm.model import EmbeddingModel
-from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.gemini.models import GeminiLLMModel, gemini_embedding_models, gemini_models
-from plybench.llm.providers.providers import Provider
-from plybench.llm.rate_limit import estimate_prompt_tokens
-from plybench.llm.response import EmbeddingBatch, LLMResponse
-from plybench.llm.tokens import EmbeddingTokens, LLMTokens
+from plyllm.client import LLMClient
+from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.llm_config import LLMConfig
+from plyllm.message import LLMMessage
+from plyllm.model import EmbeddingModel
+from plyllm.options import LLMCallOptions
+from plyllm.providers.gemini.models import GeminiLLMModel, gemini_embedding_models, gemini_models
+from plyllm.providers.providers import Provider
+from plyllm.rate_limit import estimate_prompt_tokens
+from plyllm.response import EmbeddingBatch, LLMResponse
+from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 # genai turns HTTP responses into APIError but lets transport failures through untouched. The client is
 # pinned to httpx (see build), so httpx's types are the only transport failures it can raise.

@@ -1,4 +1,4 @@
-from plybench.utils.enums import ExtendedEnum
+from plyllm.utils import ExtendedEnum
 
 
 class Provider(str, ExtendedEnum):

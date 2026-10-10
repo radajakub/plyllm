@@ -6,9 +6,9 @@ import pytest
 from anthropic import AsyncAnthropic
 from anthropic.types import Message, OutputTokensDetails, Usage
 
-from plybench.llm import LLM, ClaudeProviderConfig, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMMessage, LLMTokens, Provider
-from plybench.llm.providers.claude.client import ClaudeLLMClient, message_tokens
-from plybench.llm.providers.claude.models import ClaudeLLMModel, claude_models
+from plyllm import LLM, ClaudeProviderConfig, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMMessage, LLMTokens, Provider
+from plyllm.providers.claude.client import ClaudeLLMClient, message_tokens
+from plyllm.providers.claude.models import ClaudeLLMModel, claude_models
 
 
 def _model(model_name: str) -> ClaudeLLMModel:

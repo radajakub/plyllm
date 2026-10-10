@@ -5,8 +5,8 @@ from typing import cast
 import pytest
 from openai import AsyncOpenAI
 
-from plybench.llm.model import EmbeddingTask
-from plybench.llm.providers.openai.client import OpenAILLMClient
+from plyllm.model import EmbeddingTask
+from plyllm.providers.openai.client import OpenAILLMClient
 
 _MODEL = "text-embedding-3-small"
 

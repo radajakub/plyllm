@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import plybench.llm.router as router
-from plybench.llm import (
+import plyllm.router as router
+from plyllm import (
     LLM,
     EmbeddingModelConfig,
     LLMCallOptions,
@@ -17,11 +17,11 @@ from plybench.llm import (
     OpenAIProviderConfig,
     Provider,
 )
-from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind
-from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
-from plybench.llm.response import EmbeddingBatch, OutputText
-from plybench.llm.tokens import EmbeddingTokens
+from plyllm.client import LLMClient
+from plyllm.errors import FailureKind
+from plyllm.model import EmbeddingModel, EmbeddingTask, LLMModel
+from plyllm.response import EmbeddingBatch, OutputText
+from plyllm.tokens import EmbeddingTokens
 
 
 class _StubModel(LLMModel):
@@ -119,7 +119,7 @@ def test_build_imports_only_configured_provider(monkeypatch):
 
     llm = LLM(LLMConfig(openai=OpenAIProviderConfig(api_key="sk-test")))
     assert llm.available_providers == [Provider.OPENAI]
-    assert imported == ["plybench.llm.providers.openai.client"]
+    assert imported == ["plyllm.providers.openai.client"]
 
 
 def test_configured_provider_without_extra_is_skipped(monkeypatch):

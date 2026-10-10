@@ -6,10 +6,10 @@ from google.genai.client import AsyncClient
 from google.genai.errors import APIError
 from google.genai.types import ContentEmbedding, ContentEmbeddingStatistics, EmbedContentResponse
 
-from plybench.llm.model import EmbeddingTask
-from plybench.llm.providers.gemini.client import GeminiLLMClient
-from plybench.llm.providers.gemini.models import GeminiEmbeddingModel
-from plybench.llm.providers.providers import Provider
+from plyllm.model import EmbeddingTask
+from plyllm.providers.gemini.client import GeminiLLMClient
+from plyllm.providers.gemini.models import GeminiEmbeddingModel
+from plyllm.providers.providers import Provider
 
 _MODEL = "gemini-embedding-2"
 

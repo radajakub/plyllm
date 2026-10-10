@@ -11,15 +11,15 @@ from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError
 from openai.lib._parsing._responses import type_to_text_format_param
 from pydantic import BaseModel
 
-from plybench.llm.client import DEFAULT_RETRIES, LLMClient
-from plybench.llm.errors import FailureKind, retryable_status, status_kind
-from plybench.llm.llm_config import LLMConfig
-from plybench.llm.message import LLMMessage
-from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
-from plybench.llm.providers.providers import Provider
-from plybench.llm.response import LLMResponse
-from plybench.llm.tokens import LLMTokens
+from plyllm.client import DEFAULT_RETRIES, LLMClient
+from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.llm_config import LLMConfig
+from plyllm.message import LLMMessage
+from plyllm.options import LLMCallOptions
+from plyllm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
+from plyllm.providers.providers import Provider
+from plyllm.response import LLMResponse
+from plyllm.tokens import LLMTokens
 
 # APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
 # cover every failure the SDK raises for a request that was sent

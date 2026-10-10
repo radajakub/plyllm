@@ -18,16 +18,16 @@ import pytest
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, AuthenticationError, BadRequestError, RateLimitError
 from pydantic import BaseModel, ValidationError
 
-from plybench.llm import ClaudeProviderConfig, GeminiProviderConfig, GrokProviderConfig, LLMCallOptions, LLMConfig, LLMMessage, OpenAIProviderConfig
-from plybench.llm.client import LLMClient
-from plybench.llm.concurrency import safe_call
-from plybench.llm.errors import FailureKind, LLMCallError, LLMRateLimited, LLMTimedOut, as_call_error, retryable_status
-from plybench.llm.llm_config import DEFAULT_TIMEOUT
-from plybench.llm.providers.claude.client import ClaudeLLMClient
-from plybench.llm.providers.gemini.client import GeminiLLMClient
-from plybench.llm.providers.grok.client import GrokLLMClient
-from plybench.llm.providers.metacentrum.client import MetacentrumLLMClient
-from plybench.llm.providers.openai.client import OpenAILLMClient
+from plyllm import ClaudeProviderConfig, GeminiProviderConfig, GrokProviderConfig, LLMCallOptions, LLMConfig, LLMMessage, OpenAIProviderConfig
+from plyllm.client import LLMClient
+from plyllm.concurrency import safe_call
+from plyllm.errors import FailureKind, LLMCallError, LLMRateLimited, LLMTimedOut, as_call_error, retryable_status
+from plyllm.llm_config import DEFAULT_TIMEOUT
+from plyllm.providers.claude.client import ClaudeLLMClient
+from plyllm.providers.gemini.client import GeminiLLMClient
+from plyllm.providers.grok.client import GrokLLMClient
+from plyllm.providers.metacentrum.client import MetacentrumLLMClient
+from plyllm.providers.openai.client import OpenAILLMClient
 
 REQUEST = httpx.Request("POST", "https://example.invalid/v1/responses")
 

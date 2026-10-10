@@ -5,8 +5,8 @@ from typing import TypeVar, overload
 
 from pydantic import BaseModel
 
-from plybench.llm.providers.providers import Provider
-from plybench.llm.tokens import EmbeddingTokens, LLMTokens
+from plyllm.providers.providers import Provider
+from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 T = TypeVar("T", bound=BaseModel)
 

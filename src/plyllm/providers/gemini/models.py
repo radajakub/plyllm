@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from google.genai.types import GenerateContentConfig, ThinkingConfig, ThinkingLevel
 
-from plybench.llm.model import EmbeddingModel, EmbeddingTask, LLMModel
-from plybench.llm.options import LLMCallOptions, ReasoningEffort
-from plybench.llm.rate_limit import ModelLimits
+from plyllm.model import EmbeddingModel, EmbeddingTask, LLMModel
+from plyllm.options import LLMCallOptions, ReasoningEffort
+from plyllm.rate_limit import ModelLimits
 
 # Gemini 2.5 models (thinking_budget) and some Gemini 3 Pro variants
 _GEMINI_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})

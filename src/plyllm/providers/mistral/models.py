@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from plybench.llm.model import LLMModel
-from plybench.llm.options import LLMCallOptions, ReasoningEffort
+from plyllm.model import LLMModel
+from plyllm.options import LLMCallOptions, ReasoningEffort
 
 # the docs document only "high" and "none" (sent when thinking is off), and mistral-small-2603 answers
 # 400 to "low": "Must be one of (none, high)". The SDK enum lists more levels than the models accept
@@ -32,7 +32,7 @@ class MistralLLMModel(LLMModel):
             params["max_tokens"] = options.max_tokens
 
         # prompt_mode="reasoning" would prepend Mistral's own reasoning system prompt, which would
-        # compete with the benchmark's; leaving it unset keeps our instructions authoritative
+        # compete with the caller's; leaving it unset keeps the caller's instructions authoritative
         return params
 
 

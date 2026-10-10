@@ -4,8 +4,8 @@ from typing import Any
 
 from anthropic.types import ThinkingConfigParam
 
-from plybench.llm.model import LLMModel, TemperatureSupport
-from plybench.llm.options import LLMCallOptions, ReasoningEffort
+from plyllm.model import LLMModel, TemperatureSupport
+from plyllm.options import LLMCallOptions, ReasoningEffort
 
 # Claude Fable 5.1 / Fable 5 / Opus 5.5 / Opus 5 / Opus 4.8 / Sonnet 5.5 / Sonnet 5 / Haiku 5.5 accept the whole effort ladder
 _EFFORT_FULL: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high", "xhigh", "max"})

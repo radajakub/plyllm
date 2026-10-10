@@ -3,8 +3,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from plybench.llm.model import LLMModel
-from plybench.llm.options import LLMCallOptions, ReasoningEffort
+from plyllm.model import LLMModel
+from plyllm.options import LLMCallOptions, ReasoningEffort
 
 _DEFAULT_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})
 _KIMI_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "high", "max"})

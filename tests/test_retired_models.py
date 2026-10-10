@@ -11,7 +11,7 @@ from typing import cast
 import pytest
 from openai import AsyncOpenAI
 
-from plybench.llm import (
+from plyllm import (
     LLM,
     EmbeddingModelConfig,
     EmbeddingTask,
@@ -24,8 +24,8 @@ from plybench.llm import (
     OpenAIProviderConfig,
     Provider,
 )
-from plybench.llm.providers.metacentrum.client import MetacentrumLLMClient
-from plybench.llm.providers.openai.client import OpenAILLMClient
+from plyllm.providers.metacentrum.client import MetacentrumLLMClient
+from plyllm.providers.openai.client import OpenAILLMClient
 
 
 class _MustNotBeCalled:

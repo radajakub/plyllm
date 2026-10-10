@@ -8,11 +8,11 @@ from mistralai.client.errors import MistralError
 from mistralai.client.models import AssistantMessage, ChatCompletionChoice, ChatCompletionResponse, TextChunk, ThinkChunk, UsageInfo
 from pydantic import BaseModel, ValidationError
 
-from plybench.llm import LLM, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMMessage, MistralProviderConfig, ModelLimits, Provider
-from plybench.llm.errors import FailureKind, LLMCallError
-from plybench.llm.providers.mistral.client import MistralLLMClient, _is_retryable, completion_tokens, split_content
-from plybench.llm.providers.mistral.models import MistralLLMModel, mistral_models
-from plybench.llm.rate_limit import ModelGate, NoLimits
+from plyllm import LLM, EmbeddingModelConfig, EmbeddingTask, LLMCallOptions, LLMConfig, LLMMessage, MistralProviderConfig, ModelLimits, Provider
+from plyllm.errors import FailureKind, LLMCallError
+from plyllm.providers.mistral.client import MistralLLMClient, _is_retryable, completion_tokens, split_content
+from plyllm.providers.mistral.models import MistralLLMModel, mistral_models
+from plyllm.rate_limit import ModelGate, NoLimits
 
 
 class _Move(BaseModel):
@@ -204,7 +204,7 @@ def test_generate_puts_the_system_prompt_at_the_head_of_the_messages():
         {"role": "user", "content": "your move"},
     ]
     assert sdk.chat.kwargs["model"] == "mistral-small-2603"
-    assert sdk.chat.kwargs["prompt_cache_key"] == "PlyBench"
+    assert sdk.chat.kwargs["prompt_cache_key"] == "PlyLLM"
 
 
 def test_generate_surfaces_the_thinking_trace_as_reasoning():

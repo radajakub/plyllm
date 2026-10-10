@@ -8,15 +8,15 @@ from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError
 from openai.lib._parsing._responses import type_to_text_format_param
 from pydantic import BaseModel
 
-from plybench.llm.client import LLMClient
-from plybench.llm.errors import FailureKind, retryable_status, status_kind
-from plybench.llm.llm_config import LLMConfig
-from plybench.llm.message import LLMMessage
-from plybench.llm.options import LLMCallOptions
-from plybench.llm.providers.grok.models import GrokLLMModel, grok_models
-from plybench.llm.providers.providers import Provider
-from plybench.llm.response import LLMResponse
-from plybench.llm.tokens import LLMTokens
+from plyllm.client import LLMClient
+from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.llm_config import DEFAULT_PROMPT_CACHE_KEY, LLMConfig
+from plyllm.message import LLMMessage
+from plyllm.options import LLMCallOptions
+from plyllm.providers.grok.models import GrokLLMModel, grok_models
+from plyllm.providers.providers import Provider
+from plyllm.response import LLMResponse
+from plyllm.tokens import LLMTokens
 
 # APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
 # cover every failure the SDK raises for a request that was sent
@@ -57,16 +57,17 @@ def responses_tokens(usage: Any) -> LLMTokens:
 class GrokLLMClient(LLMClient[GrokLLMModel]):
     provider_key = Provider.GROK
 
-    def __init__(self, client: AsyncOpenAI, concurrency: int | None = None) -> None:
+    def __init__(self, client: AsyncOpenAI, concurrency: int | None = None, prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY) -> None:
         super().__init__(grok_models(), [], concurrency)
         self._client = client
+        self._prompt_cache_key = prompt_cache_key
 
     @classmethod
     def build(cls, config: LLMConfig) -> GrokLLMClient | None:
         if config.grok is None:
             return None
         client = AsyncOpenAI(api_key=config.grok.api_key, base_url=config.grok.base_url, timeout=config.grok.timeout)
-        return cls(client, config.default_concurrency)
+        return cls(client, config.default_concurrency, config.prompt_cache_key)
 
     def _should_retry_on_error(self, error: Exception) -> bool:
         if isinstance(error, APIConnectionError):
@@ -105,7 +106,7 @@ class GrokLLMClient(LLMClient[GrokLLMModel]):
             instructions=system.content,
             input=[message.to_dict() for message in messages],
             store=False,
-            prompt_cache_key="PlyBench",
+            prompt_cache_key=self._prompt_cache_key,
             **params,
         )
         if output_schema is not None:
