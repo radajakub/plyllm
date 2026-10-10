@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+import httpx2
 from mistralai.client import Mistral
 from mistralai.client.errors import MistralError
 from mistralai.client.models import AssistantMessage, BaseModelCard, ChatCompletionResponse, FTModelCard, TextChunk, ThinkChunk, UsageInfo
@@ -20,8 +20,8 @@ from plyllm.response import LLMResponse
 from plyllm.tokens import LLMTokens
 
 # MistralError covers every HTTP failure, so the status predicate below decides what is worth
-# retrying; NoResponseError and httpx failures are transport-level and always are
-_RETRY_ERRORS = (MistralError, httpx.TimeoutException, httpx.TransportError)
+# retrying; NoResponseError and httpx2 failures (the SDK's transport since mistralai 3) are transport-level and always are
+_RETRY_ERRORS = (MistralError, httpx2.TimeoutException, httpx2.TransportError)
 
 
 def _is_retryable(error: Exception) -> bool:
@@ -91,9 +91,9 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
         return isinstance(error, _RETRY_ERRORS) and _is_retryable(error)
 
     def error_kind(self, error: Exception) -> FailureKind:
-        if isinstance(error, httpx.TimeoutException):
+        if isinstance(error, httpx2.TimeoutException):
             return FailureKind.TIMEOUT  # before TransportError, which it subclasses
-        if isinstance(error, httpx.TransportError):
+        if isinstance(error, httpx2.TransportError):
             return FailureKind.CONNECTION
         if not isinstance(error, MistralError):
             return FailureKind.OTHER

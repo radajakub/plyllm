@@ -1,7 +1,7 @@
 import asyncio
 from typing import cast
 
-import httpx
+import httpx2
 import pytest
 from mistralai.client import Mistral
 from mistralai.client.errors import MistralError
@@ -24,8 +24,8 @@ def _model(model_name: str) -> MistralLLMModel:
 
 
 def _http_error(status_code: int) -> MistralError:
-    request = httpx.Request("POST", "https://api.mistral.ai/v1/chat/completions")
-    return MistralError("boom", httpx.Response(status_code=status_code, request=request))
+    request = httpx2.Request("POST", "https://api.mistral.ai/v1/chat/completions")
+    return MistralError("boom", httpx2.Response(status_code=status_code, request=request))
 
 
 def test_from_env_builds_mistral_config_from_api_key(monkeypatch):
@@ -161,6 +161,22 @@ def test_only_throttling_and_server_errors_are_retried():
     assert not _is_retryable(_http_error(422))
     # transport failures carry no status and are always worth another attempt
     assert _is_retryable(RuntimeError("connection reset"))
+
+
+@pytest.mark.parametrize(
+    ("error", "kind"),
+    [
+        (httpx2.ConnectError("refused"), FailureKind.CONNECTION),
+        (httpx2.RemoteProtocolError("server disconnected"), FailureKind.CONNECTION),
+        (httpx2.ReadTimeout("slow"), FailureKind.TIMEOUT),
+        (httpx2.ConnectTimeout("slow"), FailureKind.TIMEOUT),
+    ],
+)
+def test_transport_errors_of_the_sdk_are_retried(error: Exception, kind: FailureKind):
+    # since mistralai 3 the SDK raises httpx2 errors, which do not subclass httpx's
+    client = MistralLLMClient.__new__(MistralLLMClient)
+    assert client._should_retry_on_error(error) is True
+    assert client.error_kind(error) is kind
 
 
 class _FakeChat:

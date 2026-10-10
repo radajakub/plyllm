@@ -117,10 +117,12 @@ could use.
 A failed call is retried with exponential backoff only when another attempt can help: a connection
 failure, a timeout, or HTTP 408, 409, 429 or 5xx. Any other error (400, 401, 404, ...) fails at once. A call
 that still fails raises `LLMCallError`, whose `kind` says why (`timeout`, `rate_limit`, `connection`, ...).
-This rule only works if every provider raises errors of a known type. That is why all providers talk HTTP
-through **httpx**:
+This rule only works if every provider raises errors of a known type. That is why each provider talks HTTP
+through one fixed library:
 
-- OpenAI, Grok, Metacentrum, Claude and Mistral use httpx through their SDKs.
+- OpenAI, Grok, Metacentrum, Claude and Mistral use **httpx2** through their SDKs (since `openai` 3,
+  `anthropic` 1 and `mistralai` 3). The OpenAI-based and Claude clients catch the SDKs' own error types;
+  the Mistral client catches httpx2's transport errors, which do not subclass httpx's.
 - `google-genai` switches its async calls to **aiohttp** whenever aiohttp is importable. Then a network
   failure surfaces as an aiohttp exception, which the retry rule does not know. The call would fail at once
   as `other` instead of being retried. The Gemini client therefore passes genai its own `httpx.AsyncClient`,
