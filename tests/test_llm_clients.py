@@ -23,6 +23,11 @@ from plybench.llm import (
     OpenAIProviderConfig,
     Provider,
 )
+from plybench.llm.providers.claude.client import ClaudeLLMClient
+from plybench.llm.providers.gemini.client import GeminiLLMClient
+from plybench.llm.providers.grok.client import GrokLLMClient
+from plybench.llm.providers.metacentrum.client import MetacentrumLLMClient
+from plybench.llm.providers.openai.client import OpenAILLMClient
 
 _GENERATING = [Provider.OPENAI, Provider.GEMINI, Provider.GROK, Provider.CLAUDE, Provider.MISTRAL, Provider.METACENTRUM]
 
@@ -68,10 +73,23 @@ def test_each_provider_uses_its_own_concurrency_when_none_is_set():
 
     limits = {provider: llm._provider_map[provider]._semaphore.concurrency for provider in _GENERATING}
 
-    assert limits == {Provider.OPENAI: 10, Provider.GEMINI: 20, Provider.GROK: 10, Provider.CLAUDE: 10, Provider.MISTRAL: 10, Provider.METACENTRUM: 4}
+    assert limits == {Provider.OPENAI: 10, Provider.GEMINI: 10, Provider.GROK: 10, Provider.CLAUDE: 10, Provider.MISTRAL: 10, Provider.METACENTRUM: 4}
 
 
 def test_a_set_concurrency_overrides_every_provider_default():
     llm = _llm(default_concurrency=3)
 
     assert {llm._provider_map[provider]._semaphore.concurrency for provider in _GENERATING} == {3}
+
+
+def test_aclose_closes_every_providers_connection_pool():
+    llm = _llm()
+    clients = llm._provider_map
+
+    asyncio.run(llm.aclose())
+
+    for client in (clients[Provider.OPENAI], clients[Provider.GROK], clients[Provider.CLAUDE], clients[Provider.METACENTRUM]):
+        assert isinstance(client, OpenAILLMClient | GrokLLMClient | ClaudeLLMClient | MetacentrumLLMClient)
+        assert client._client.is_closed(), client.provider_key
+    gemini = clients[Provider.GEMINI]
+    assert isinstance(gemini, GeminiLLMClient) and gemini._http_client is not None and gemini._http_client.is_closed

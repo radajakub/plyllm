@@ -12,6 +12,8 @@ _MISTRAL_REASONING: frozenset[ReasoningEffort] = frozenset({"high"})
 # reasoning_effort is mandatory on these models; "none" suppresses the thinking chunk entirely
 _THINKING_OFF = "none"
 _DEFAULT_EFFORT: ReasoningEffort = "high"
+# "Batch processing ... reduces the price by 50%"; the docs do not say whether that covers cached input too
+_BATCH_RATIO = 0.5
 
 
 class MistralLLMModel(LLMModel):
@@ -47,6 +49,7 @@ def mistral_models() -> list[MistralLLMModel]:
             cached_input_cost=0.07,
             thinking=True,
             supported_reasoning=_MISTRAL_REASONING,
+            batch_ratio=_BATCH_RATIO,
         ),
         MistralLLMModel(
             "mistral-medium-3.5",
@@ -56,6 +59,7 @@ def mistral_models() -> list[MistralLLMModel]:
             cached_input_cost=0.15,
             thinking=True,
             supported_reasoning=_MISTRAL_REASONING,
+            batch_ratio=_BATCH_RATIO,
         ),
         MistralLLMModel(
             "mistral-small-4",
@@ -65,5 +69,6 @@ def mistral_models() -> list[MistralLLMModel]:
             cached_input_cost=0.015,
             thinking=True,
             supported_reasoning=_MISTRAL_REASONING,
+            batch_ratio=_BATCH_RATIO,
         ),
     ]

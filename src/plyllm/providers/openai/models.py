@@ -45,6 +45,8 @@ class OpenAILLMModel(LLMModel):
             # temperature is accepted only at effort none, which is how thinking is turned off
             temperature_support=TemperatureSupport.NEVER if thinking_only else TemperatureSupport.WITHOUT_THINKING,
             needs_effort_to_think=needs_effort_to_think,
+            # every model's Batch row is half its Standard row, cached input included
+            batch_ratio=0.5,
         )
 
     def extract_params(self, options: LLMCallOptions) -> dict[str, Any]:

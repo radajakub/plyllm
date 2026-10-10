@@ -103,6 +103,8 @@ class LLMModel(ABC):
         temperature_support: TemperatureSupport = TemperatureSupport.ALWAYS,
         effort_without_thinking: bool = False,
         needs_effort_to_think: bool = False,
+        batch_ratio: float | None = None,
+        batch_cached_input_cost: float | None = None,
     ) -> None:
         self.model_name = model_name  # stable internal alias, used in configs/results
         self.model_string = model_string  # exact vendor id sent to the API
@@ -127,12 +129,24 @@ class LLMModel(ABC):
         self.effort_without_thinking = effort_without_thinking
         # thinking on without an effort does not reason: the provider's default effort is no reasoning
         self.needs_effort_to_think = needs_effort_to_think
+        # Batch API price as a share of the standard one, for input, cached input and output alike; None when
+        # the provider offers no batch price for the model
+        self.batch_ratio = batch_ratio
+        # a batch cache-read price the provider lists apart from the ratio (some Gemini models)
+        self.batch_cached_input_cost = batch_cached_input_cost
 
-    def cost(self, tokens: LLMTokens) -> float:
-        uncached_cost = max(tokens.input_tokens - tokens.cached_input_tokens, 0) / MILLION * self.input_cost
-        cached_cost = tokens.cached_input_tokens / MILLION * self.cached_input_cost
-        output_cost = tokens.output_tokens / MILLION * self.output_cost
-        return uncached_cost + cached_cost + output_cost
+    def cost(self, tokens: LLMTokens, batch: bool = False) -> float:
+        input_cost, cached_input_cost, output_cost = self.input_cost, self.cached_input_cost, self.output_cost
+        if batch:
+            if self.batch_ratio is None:
+                raise ValueError(f"Model {self.model_name} has no batch price")
+            input_cost, output_cost = input_cost * self.batch_ratio, output_cost * self.batch_ratio
+            cached_input_cost = self.batch_cached_input_cost if self.batch_cached_input_cost is not None else cached_input_cost * self.batch_ratio
+
+        uncached = max(tokens.input_tokens - tokens.cached_input_tokens, 0) / MILLION * input_cost
+        cached = tokens.cached_input_tokens / MILLION * cached_input_cost
+        output = tokens.output_tokens / MILLION * output_cost
+        return uncached + cached + output
 
     def _validate_common(self, options: LLMCallOptions) -> None:
         # validation to verify that the options are compatible with the model

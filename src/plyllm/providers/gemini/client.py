@@ -74,20 +74,24 @@ def _embedding_tokens(response: EmbedContentResponse, texts: list[str]) -> int:
 class GeminiLLMClient(LLMClient[GeminiLLMModel]):
     provider_key = Provider.GEMINI
 
-    def __init__(self, client: genai.client.AsyncClient, concurrency: int | None = None) -> None:
+    def __init__(self, client: genai.client.AsyncClient, concurrency: int | None = None, http_client: httpx.AsyncClient | None = None) -> None:
         super().__init__(gemini_models(), gemini_embedding_models(), concurrency)
         self._client = client
+        # genai leaves a client it was given open, so the one build() passes in is closed here
+        self._http_client = http_client
 
     @classmethod
     def build(cls, config: LLMConfig) -> GeminiLLMClient | None:
         if config.gemini is None:
             return None
-        # genai switches to aiohttp whenever it is installed (the Claude extra pulls it in); passing an httpx
-        # client pins the transport, so its failures do not depend on what else happens to be installed.
+        # genai switches to aiohttp whenever it is installed (any other package may pull it in); passing an httpx
+        # client pins the transport, so its failures do not depend on what else happens to be installed
+        # (README, "Retries and HTTP transport", says why httpx rather than aiohttp).
         # The timeout still applies per request; HttpOptions takes milliseconds.
-        http_options = HttpOptions(timeout=int(config.gemini.timeout * 1000), httpx_async_client=httpx.AsyncClient())
+        http_client = httpx.AsyncClient()
+        http_options = HttpOptions(timeout=int(config.gemini.timeout * 1000), httpx_async_client=http_client)
         client = genai.Client(api_key=config.gemini.api_key, http_options=http_options).aio
-        return cls(client, config.default_concurrency)
+        return cls(client, config.default_concurrency, http_client)
 
     def _should_retry_on_error(self, error: Exception) -> bool:
         if isinstance(error, httpx.TransportError):
@@ -107,6 +111,11 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel]):
             return FailureKind.OTHER
         code = getattr(error, "code", None)
         return FailureKind.CONNECTION if code is None else status_kind(code)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+        if self._http_client is not None:
+            await self._http_client.aclose()
 
     async def served_models(self) -> set[str]:
         return {model.name.removeprefix("models/") async for model in await self._client.models.list() if model.name}

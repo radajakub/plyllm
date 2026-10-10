@@ -98,6 +98,10 @@ class MistralLLMClient(LLMClient[MistralLLMModel]):
             return FailureKind.OTHER
         return status_kind(error.status_code)
 
+    async def aclose(self) -> None:
+        # the SDK closes its pool only on leaving `async with`; this is that exit
+        await self._client.__aexit__(None, None, None)
+
     async def served_models(self) -> set[str]:
         listed = await self._client.models.list_async()
         cards = [model for model in listed.data or [] if isinstance(model, (BaseModelCard, FTModelCard))]

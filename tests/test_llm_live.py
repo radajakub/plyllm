@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import warnings
+from collections.abc import Coroutine
+from typing import Any, TypeVar
 
 import pytest
 from pydantic import BaseModel
@@ -67,6 +69,9 @@ _MAX_CALL_COST = 0.03
 _PROMPT_ALLOWANCE = 1_000  # generous for a one-line question
 
 
+T = TypeVar("T")
+
+
 @pytest.fixture
 def llm() -> LLM:
     # built per test: the SDKs' connection pools are bound to the event loop that first used them
@@ -74,6 +79,18 @@ def llm() -> LLM:
     for client in llm._provider_map.values():
         client._retries = _LIVE_RETRIES
     return llm
+
+
+def _run(llm: LLM, call: Coroutine[Any, Any, T]) -> T:
+    # closes the connection pools on the loop that used them, so nothing is left for the garbage collector
+    # to close after the loop is gone ("Event loop is closed")
+    async def body() -> T:
+        try:
+            return await call
+        finally:
+            await llm.aclose()
+
+    return asyncio.run(body())
 
 
 def _require(llm: LLM, provider: Provider) -> None:
@@ -117,7 +134,7 @@ def test_every_active_model_is_still_served(llm: LLM, provider: Provider):
     active = {model.model_string for model in models if not model.retired}
     retired = {model.model_string for model in models if model.retired}
 
-    served = asyncio.run(llm.served_models(provider))
+    served = _run(llm, llm.served_models(provider))
 
     revived = retired & served
     if revived:
@@ -145,7 +162,7 @@ def test_a_plain_answer(llm: LLM, live_costs: list[float], case: str):
     config = _config(case)
     _require(llm, config.provider)
 
-    response = asyncio.run(llm.generate(config, _SYSTEM, [_QUESTION]))
+    response = _run(llm, llm.generate(config, _SYSTEM, [_QUESTION]))
 
     assert "4" in response.output_text, response.output_text
     _check(llm, config, response, live_costs)
@@ -157,7 +174,7 @@ def test_a_structured_answer(llm: LLM, live_costs: list[float], case: str):
     config = _config(case)
     _require(llm, config.provider)
 
-    response = asyncio.run(llm.generate(config, _SYSTEM, [_QUESTION], output_schema=_Answer))
+    response = _run(llm, llm.generate(config, _SYSTEM, [_QUESTION], output_schema=_Answer))
 
     assert response.resolve_structured_output(_Answer).answer == 4, response.output_text
     _check(llm, config, response, live_costs)
