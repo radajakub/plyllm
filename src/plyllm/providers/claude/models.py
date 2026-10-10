@@ -56,6 +56,8 @@ class ClaudeLLMModel(LLMModel):
             temperature_support=TemperatureSupport.WITHOUT_THINKING if supports_temperature else TemperatureSupport.NEVER,
             # "effort works with or without thinking": it also sets how long the answer is
             effort_without_thinking=uses_effort,
+            # 50% on input and output; the cache multipliers stack with it
+            batch_ratio=0.5,
         )
         # uses_effort => reasoning depth is set with output_config.effort and thinking is adaptive;
         # legacy models take a numeric thinking budget instead and reject effort

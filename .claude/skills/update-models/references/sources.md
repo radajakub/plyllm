@@ -8,6 +8,15 @@ reasoning/effort levels. A general "reasoning" guide and a per-model page someti
 which levels a model accepts — prefer the intersection, because an unsupported level is a runtime
 400 while a missing one only blocks a config.
 
+Batch prices (checked 2026-10-10) are a `batch_ratio` on each model, applied to input, cached input and
+output: OpenAI 0.5 (every Batch row is half the Standard row; gpt-5.4 cached shows $0.13, rounded), Claude
+0.5 (stacks with the cache multipliers), Mistral 0.5 (whether it covers cached input is not stated),
+Gemini 0.5 (see its section for cache reads), Grok per model (0.8 on grok-4.3 and grok-4.20; no discount
+listed for the others, which get `None`), Metacentrum `None` (free). Batch: OpenAI
+<https://developers.openai.com/api/docs/guides/batch>, Anthropic pricing page, Gemini
+<https://ai.google.dev/gemini-api/docs/batch-mode>, xAI <https://docs.x.ai/developers/pricing>, Mistral
+<https://mistral.ai/pricing>.
+
 ## Anthropic (`claude`)
 
 - Pricing (input / output / cache read + write, batch, all models): <https://platform.claude.com/docs/en/about-claude/pricing>
@@ -57,6 +66,13 @@ Shutdown dates: <https://developers.openai.com/api/docs/deprecations>.
 ## Google Gemini (`gemini`)
 
 - Pricing, paid tier, per model: <https://ai.google.dev/gemini-api/docs/pricing>
+
+`cached_input_cost` is the "Context caching price" row (hourly storage is not modelled). The batch table
+lists its own cache-read price; where it is not half of the standard one (2.5 models, 3.1 Pro, 3 Flash:
+same as standard; 3.5 Flash-Lite: 0.02), record it as `batch_cached_input_cost`. The batch-mode page says
+batch cache hits pay "the standard context caching rates", which contradicts the table for 3.8 / 3.6 Flash
+and 3.1 Flash-Lite; the table is used. 3.7 Flash and 3.5 Flash had no pricing block on 2026-10-10, so
+their cache price is 0 until the page lists one.
 - Model list, stable vs preview: <https://ai.google.dev/gemini-api/docs/models>
 - Deprecations and shutdown dates: <https://ai.google.dev/gemini-api/docs/deprecations>
 - Embedding task prefixes (`task:` / `title:`), verbatim: <https://ai.google.dev/gemini-api/docs/embeddings>
@@ -148,7 +164,9 @@ a unique id in each prompt, because the proxy caches identical prompts and ignor
 does). Results on 2026-10-09: the Qwen templates read `enable_thinking` (not `thinking`), kimi-k3 reads
 `thinking`, gpt-oss-120b and deepseek-v4.1-flash always reason (`thinking_only`), gemma-4 reasons only with
 an effort (`needs_effort_to_think`), mistral-medium-3.5 gave no reasoning with thinking on
-(`thinking=False`), and glm-5.3 answered every call with 400 "`tools` must not be an empty array". The stable aliases (`qwen3.5`, `kimi`,
+(`thinking=False`), and glm-5.3 answered every call with 400 "`tools` must not be an empty array". On
+2026-10-10 that happened even for a minimal `/v1/responses` request, while `/v1/chat/completions` answered
+normally: the proxy's Responses-to-chat conversion breaks for this model, not the harness's request. The stable aliases (`qwen3.5`, `kimi`,
 `glm`, ...) resolve to whatever is current, so they keep configs working but not outputs: `qwen3.5`
 points at `qwen3.5-int4` (397B, AWQ int4).
 

@@ -32,6 +32,8 @@ class GeminiLLMModel(LLMModel):
         model_string: str,
         input_cost: float,
         output_cost: float,
+        cached_input_cost: float = 0.0,
+        batch_cached_input_cost: float | None = None,
         thinking: bool = False,
         thinking_only: bool = False,
         uses_thinking_level: bool = False,
@@ -43,10 +45,14 @@ class GeminiLLMModel(LLMModel):
             model_string,
             input_cost=input_cost,
             output_cost=output_cost,
+            cached_input_cost=cached_input_cost,
             thinking=thinking,
             thinking_only=thinking_only,
             supported_reasoning=supported_reasoning,
             retired=retired,
+            # "Batch API usage is priced at 50% of the standard interactive API cost"
+            batch_ratio=0.5,
+            batch_cached_input_cost=batch_cached_input_cost,
         )
         self.uses_thinking_level = uses_thinking_level
 
@@ -103,12 +109,18 @@ class GeminiEmbeddingModel(EmbeddingModel):
 
 
 def gemini_models() -> list[GeminiLLMModel]:
+    # cached_input_cost is the "context caching" price (storage per hour is not modelled). Where the batch table
+    # lists a cache-read price other than half of it, batch_cached_input_cost records it; on 2026-10-10 the
+    # batch-mode page said batch cache hits pay "the standard context caching rates", which the pricing table
+    # follows only for some models. The pricing page lists no 3.7 Flash or 3.5 Flash, so their cache price
+    # is unknown and stays 0
     return [
         GeminiLLMModel(
             "gemini-3.8-flash",
             "gemini-3.8-flash",
             input_cost=0.75,
             output_cost=3.75,
+            cached_input_cost=0.075,
             thinking=True,
             thinking_only=True,
             uses_thinking_level=True,
@@ -124,12 +136,13 @@ def gemini_models() -> list[GeminiLLMModel]:
             uses_thinking_level=True,
             supported_reasoning=_GEMINI_REASONING,
         ),
-        # 3.8 / 3.7 / 3.6 Flash are priced at 0.75 / 3.75 through 2026-12-31, then 1.5 / 7.5
+        # 3.8 / 3.7 / 3.6 Flash are priced at 0.75 / 3.75 (cache read 0.075) through 2026-12-31, then 1.5 / 7.5 (0.15)
         GeminiLLMModel(
             "gemini-3.6-flash",
             "gemini-3.6-flash",
             input_cost=0.75,
             output_cost=3.75,
+            cached_input_cost=0.075,
             thinking=True,
             thinking_only=True,
             uses_thinking_level=True,
@@ -143,6 +156,8 @@ def gemini_models() -> list[GeminiLLMModel]:
             "gemini-3.5-flash-lite",
             input_cost=0.3,
             output_cost=2.5,
+            cached_input_cost=0.03,
+            batch_cached_input_cost=0.02,
             thinking=True,
             thinking_only=True,
             uses_thinking_level=True,
@@ -153,6 +168,8 @@ def gemini_models() -> list[GeminiLLMModel]:
             "gemini-3.1-pro-preview",
             input_cost=2.0,
             output_cost=12.0,
+            cached_input_cost=0.2,
+            batch_cached_input_cost=0.2,
             thinking=True,
             thinking_only=True,
             uses_thinking_level=True,
@@ -164,6 +181,7 @@ def gemini_models() -> list[GeminiLLMModel]:
             "gemini-3.1-flash-lite",
             input_cost=0.25,
             output_cost=1.5,
+            cached_input_cost=0.025,
             thinking=True,
             thinking_only=True,
             uses_thinking_level=True,
@@ -175,6 +193,8 @@ def gemini_models() -> list[GeminiLLMModel]:
             "gemini-3-flash-preview",
             input_cost=0.5,
             output_cost=3.0,
+            cached_input_cost=0.05,
+            batch_cached_input_cost=0.05,
             thinking=True,
             thinking_only=True,
             uses_thinking_level=True,
@@ -186,6 +206,8 @@ def gemini_models() -> list[GeminiLLMModel]:
             "gemini-2.5-pro",
             input_cost=1.25,
             output_cost=10.0,
+            cached_input_cost=0.125,
+            batch_cached_input_cost=0.125,
             thinking=True,
             thinking_only=True,
             uses_thinking_level=False,
@@ -196,6 +218,8 @@ def gemini_models() -> list[GeminiLLMModel]:
             "gemini-2.5-flash",
             input_cost=0.3,
             output_cost=2.5,
+            cached_input_cost=0.03,
+            batch_cached_input_cost=0.03,
             thinking=True,
             thinking_only=False,
             uses_thinking_level=False,
@@ -206,6 +230,8 @@ def gemini_models() -> list[GeminiLLMModel]:
             "gemini-2.5-flash-lite",
             input_cost=0.1,
             output_cost=0.4,
+            cached_input_cost=0.01,
+            batch_cached_input_cost=0.01,
             thinking=True,
             thinking_only=False,
             uses_thinking_level=False,

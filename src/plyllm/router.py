@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 
 from pydantic import BaseModel
@@ -69,6 +70,10 @@ class LLM:
     def get_available_embedding_models(self, provider: Provider) -> list[EmbeddingModel]:
         return self._route(provider).get_available_embedding_models()
 
+    async def aclose(self) -> None:
+        # closes every provider's connection pool; await it at the end of the asyncio.run() that used them
+        await asyncio.gather(*(client.aclose() for client in self._provider_map.values()))
+
     async def served_models(self, provider: Provider) -> set[str]:
         return await self._route(provider).served_models()
 
@@ -78,8 +83,9 @@ class LLM:
     def resolve_embedding_model(self, provider: Provider, model_name: str) -> EmbeddingModel:
         return self._route(provider).resolve_embedding_model(model_name)
 
-    def calculate_cost(self, model_config: ModelConfig, tokens: LLMTokens) -> float:
-        return self._route(model_config.provider).calculate_cost(model_config.model_name, tokens)
+    def calculate_cost(self, model_config: ModelConfig, tokens: LLMTokens, batch: bool = False) -> float:
+        # batch=True prices the tokens at the provider's Batch API rate
+        return self._route(model_config.provider).calculate_cost(model_config.model_name, tokens, batch)
 
     def calculate_embedding_cost(self, model_config: EmbeddingModelConfig, tokens: EmbeddingTokens) -> float:
         return self._route(model_config.provider).calculate_embedding_cost(model_config.model_name, tokens)

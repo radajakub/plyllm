@@ -52,6 +52,11 @@ class LLMClient(ABC, Generic[ModelT]):
         # override this; remote providers keep the no-op default
         return None
 
+    async def aclose(self) -> None:
+        # releases the SDK's connection pool. Call it on the event loop that made the requests: a pool left to
+        # the garbage collector after asyncio.run() returns logs "Event loop is closed"
+        return None
+
     async def served_models(self) -> set[str]:
         # the model ids the provider's endpoint lists right now, to catch a retired or mistyped model_string
         # before it fails a run. Remote providers override this with their SDK's list call, which is free
@@ -81,8 +86,8 @@ class LLMClient(ABC, Generic[ModelT]):
     def get_available_embedding_models(self) -> list[EmbeddingModel]:
         return list(self._embedding_models.values())
 
-    def calculate_cost(self, model_name: str, tokens: LLMTokens) -> float:
-        return self.resolve_model(model_name).cost(tokens)
+    def calculate_cost(self, model_name: str, tokens: LLMTokens, batch: bool = False) -> float:
+        return self.resolve_model(model_name).cost(tokens, batch)
 
     def calculate_embedding_cost(self, model_name: str, tokens: EmbeddingTokens) -> float:
         return self.resolve_embedding_model(model_name).cost(tokens)
