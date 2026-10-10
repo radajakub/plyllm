@@ -6,6 +6,7 @@ from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError
 
 # private: the helper responses.parse() uses to build the strict schema; a test pins it against SDK upgrades
 from openai.lib._parsing._responses import type_to_text_format_param
+from openai.types.responses import Response
 from pydantic import BaseModel
 
 from plyllm.client import LLMClient
@@ -54,8 +55,9 @@ def responses_tokens(usage: Any) -> LLMTokens:
     )
 
 
-class GrokLLMClient(LLMClient[GrokLLMModel]):
+class GrokLLMClient(LLMClient[GrokLLMModel, Response]):
     provider_key = Provider.GROK
+    _retry_errors = _RETRY_ERRORS
 
     def __init__(self, client: AsyncOpenAI, concurrency: int | None = None, prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY) -> None:
         super().__init__(grok_models(), [], concurrency)
@@ -90,16 +92,7 @@ class GrokLLMClient(LLMClient[GrokLLMModel]):
     async def served_models(self) -> set[str]:
         return {model.id async for model in self._client.models.list()}
 
-    async def generate(
-        self,
-        model_name: str,
-        system: LLMMessage,
-        messages: list[LLMMessage],
-        options: LLMCallOptions,
-        output_schema: type[BaseModel] | None = None,
-    ) -> LLMResponse:
-        model: GrokLLMModel = self._resolve_for_generate(model_name, output_schema)
-
+    def _request(self, model: GrokLLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None) -> dict[str, Any]:
         params = model.extract_params(options)
         kwargs: dict[str, Any] = dict(
             model=model.model_string,
@@ -113,9 +106,15 @@ class GrokLLMClient(LLMClient[GrokLLMModel]):
             # the strict schema responses.parse() would send; the answer is checked by LLMClient._answer
             # rather than inside the SDK, so one that does not fit keeps its raw text and tokens
             kwargs["text"] = {"format": type_to_text_format_param(output_schema)}
+        return kwargs
 
-        response = await self._dispatch(model, system, messages, options, lambda: self._client.responses.create(**kwargs), _RETRY_ERRORS, tokens_of=responses_total_tokens)
+    async def _send(self, kwargs: dict[str, Any]) -> Response:
+        return await self._client.responses.create(**kwargs)
 
+    def _tokens_of(self, response: Response) -> int:
+        return responses_total_tokens(response)
+
+    def _parse(self, model: GrokLLMModel, response: Response, output_schema: type[BaseModel] | None) -> LLMResponse:
         reasoning = _reasoning_summaries(response)
         tokens = responses_tokens(response.usage)
 

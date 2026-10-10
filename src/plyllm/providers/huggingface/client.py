@@ -4,7 +4,7 @@ from __future__ import annotations
 # pyright: reportMissingImports=false
 import asyncio
 from types import ModuleType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -12,7 +12,7 @@ from plyllm.client import LLMClient
 from plyllm.errors import FailureKind
 from plyllm.llm_config import HuggingFaceProviderConfig, LLMConfig
 from plyllm.message import LLMMessage
-from plyllm.model import EmbeddingModel
+from plyllm.model import EmbeddingModel, LLMModel
 from plyllm.options import LLMCallOptions
 from plyllm.providers.huggingface.models import huggingface_embedding_models
 from plyllm.providers.providers import Provider
@@ -44,7 +44,7 @@ def _import_transformers() -> tuple[type, type, ModuleType]:
     return AutoModel, AutoTokenizer, hf_logging
 
 
-class HuggingFaceLLMClient(LLMClient):
+class HuggingFaceLLMClient(LLMClient[LLMModel, None]):
     provider_key = Provider.HUGGINGFACE
 
     def __init__(self, config: HuggingFaceProviderConfig) -> None:
@@ -131,4 +131,16 @@ class HuggingFaceLLMClient(LLMClient):
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
     ) -> LLMResponse:
+        raise NotImplementedError("HuggingFace generate is not supported yet")
+
+    def _request(self, model: LLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None) -> dict[str, Any]:
+        raise NotImplementedError("HuggingFace generate is not supported yet")
+
+    async def _send(self, kwargs: dict[str, Any]) -> None:
+        raise NotImplementedError("HuggingFace generate is not supported yet")
+
+    def _tokens_of(self, response: None) -> int:
+        raise NotImplementedError("HuggingFace generate is not supported yet")
+
+    def _parse(self, model: LLMModel, response: None, output_schema: type[BaseModel] | None) -> LLMResponse:
         raise NotImplementedError("HuggingFace generate is not supported yet")
