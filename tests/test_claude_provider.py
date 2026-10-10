@@ -79,15 +79,11 @@ def test_thinking_budget_stays_below_max_tokens():
     assert params["thinking"]["budget_tokens"] < params["max_tokens"]
 
 
-def test_temperature_is_forwarded_where_the_api_accepts_it_and_refused_elsewhere():
-    options = LLMCallOptions(thinking_enabled=False, temperature=0.3)
-
-    assert _model("claude-sonnet-4.6").extract_params(options)["temperature"] == 0.3
-    with pytest.raises(ValueError, match="does not accept temperature"):
-        _model("claude-opus-5").extract_params(options)
-    # the older models reject sampling together with thinking
-    with pytest.raises(ValueError, match="only with thinking disabled"):
-        _model("claude-haiku-4.5").extract_params(LLMCallOptions(thinking_enabled=True, temperature=0.3))
+def test_temperature_is_refused_by_every_model():
+    # anthropic 1.0 removed temperature from messages.create, which would fail with a TypeError
+    for model in claude_models():
+        with pytest.raises(ValueError, match="does not accept temperature"):
+            model.extract_params(LLMCallOptions(thinking_enabled=model.thinking_only, temperature=0.3))
 
 
 def test_effort_without_thinking_only_where_the_effort_parameter_exists():

@@ -6,6 +6,19 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Changed
+
+- Provider SDKs raised to new majors: `openai>=3.28.0,<4`, `anthropic>=1.13.0,<2`, `mistralai>=3.2.0,<4`.
+  All three now use httpx2 instead of httpx.
+- Claude no longer accepts `temperature` on any model; a call with one raises `ValueError` before any
+  request is sent. anthropic 1.0 removed the argument from `messages.create`. Sonnet 4.6 and Haiku 4.5
+  accepted it before.
+
+### Fixed
+
+- Mistral: timeouts and connection failures are retried and classified again. mistralai 3 raises httpx2
+  errors, which the client did not catch, so they failed at once as `other`.
+
 ## [1.0.0] - 2026-10-10
 
 ### Added

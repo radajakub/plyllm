@@ -37,15 +37,15 @@ dependencies = [
 
 [project.optional-dependencies]
 # majors capped at the versions the live tests ran on; lift them in a separate change, with a live run
-openai = ["openai>=2.48.0,<3"]
+openai = ["openai>=3.28.0,<4"]
 gemini = ["google-genai>=2.14.0,<3"]
-grok = ["openai>=2.48.0,<3"]
-anthropic = ["anthropic>=0.120.2,<1"]
-mistral = ["mistralai>=2.9.1,<3"]
+grok = ["openai>=3.28.0,<4"]
+anthropic = ["anthropic>=1.13.0,<2"]
+mistral = ["mistralai>=3.2.0,<4"]
 # metacentrum is an OpenAI-compatible endpoint and reuses the openai SDK
-metacentrum = ["openai>=2.48.0,<3"]
+metacentrum = ["openai>=3.28.0,<4"]
 huggingface = ["torch>=2.4.0", "transformers>=4.44.0"]
-all = ["openai>=2.48.0,<3", "google-genai>=2.14.0,<3", "anthropic>=0.120.2,<1", "mistralai>=2.9.1,<3", "torch>=2.4.0", "transformers>=4.44.0"]
+all = ["openai>=3.28.0,<4", "google-genai>=2.14.0,<3", "anthropic>=1.13.0,<2", "mistralai>=3.2.0,<4", "torch>=2.4.0", "transformers>=4.44.0"]
 
 [project.urls]
 Repository = "https://github.com/radajakub/plyllm"
@@ -88,8 +88,8 @@ dev = [
     "ruff>=0.16.0",
     "pyright>=1.1.414",
     # provider SDKs are optional extras; include the API-based ones so the test suite runs
-    "openai>=2.48.0,<3",
+    "openai>=3.28.0,<4",
     "google-genai>=2.14.0,<3",
-    "anthropic>=0.120.2,<1",
-    "mistralai>=2.9.1,<3",
+    "anthropic>=1.13.0,<2",
+    "mistralai>=3.2.0,<4",
 ]

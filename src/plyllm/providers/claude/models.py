@@ -40,7 +40,6 @@ class ClaudeLLMModel(LLMModel):
         thinking: bool = False,
         thinking_only: bool = False,
         uses_effort: bool = True,
-        supports_temperature: bool = False,
         max_output_tokens: int = 32000,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
         retired: bool = False,
@@ -55,8 +54,8 @@ class ClaudeLLMModel(LLMModel):
             thinking_only=thinking_only,
             supported_reasoning=supported_reasoning,
             retired=retired,
-            # the newer models reject a non-default temperature on every request; older ones only with thinking on
-            temperature_support=TemperatureSupport.WITHOUT_THINKING if supports_temperature else TemperatureSupport.NEVER,
+            # anthropic 1.0 removed temperature from messages.create, so no Claude model takes it
+            temperature_support=TemperatureSupport.NEVER,
             # "effort works with or without thinking": it also sets how long the answer is
             effort_without_thinking=uses_effort,
             # 50% on input and output; the cache multipliers stack with it
@@ -100,10 +99,6 @@ class ClaudeLLMModel(LLMModel):
 
         if self.uses_effort and options.reasoning_effort is not None:
             params["output_config"] = {"effort": options.reasoning_effort}
-
-        # validate() has already refused a temperature this model or this thinking setting does not take
-        if options.temperature is not None:
-            params["temperature"] = options.temperature
 
         return params
 
@@ -160,7 +155,6 @@ def claude_models() -> list[ClaudeLLMModel]:
             output_cost=15.0,
             cached_input_cost=0.3,
             thinking=True,
-            supports_temperature=True,
             supported_reasoning=_EFFORT_NO_XHIGH,
         ),
         # Claude Haiku 5.5 (effort + adaptive thinking; thinking can be turned off at effort high or below).
@@ -184,7 +178,6 @@ def claude_models() -> list[ClaudeLLMModel]:
             cached_input_cost=0.1,
             thinking=True,
             uses_effort=False,
-            supports_temperature=True,
             supported_reasoning=_LEGACY_REASONING,
         ),
     ]

@@ -14,6 +14,7 @@ from typing import cast
 
 import anthropic
 import httpx
+import httpx2
 import pytest
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, AuthenticationError, BadRequestError, RateLimitError
 from pydantic import BaseModel, ValidationError
@@ -29,7 +30,7 @@ from plyllm.providers.grok.client import GrokLLMClient
 from plyllm.providers.metacentrum.client import MetacentrumLLMClient
 from plyllm.providers.openai.client import OpenAILLMClient
 
-REQUEST = httpx.Request("POST", "https://example.invalid/v1/responses")
+REQUEST = httpx2.Request("POST", "https://example.invalid/v1/responses")
 
 
 # each provider on the openai SDK keeps its own copy of the retry rule and error_kind, so they can be fixed
@@ -41,9 +42,9 @@ _OPENAI_SDK_CLIENTS = [OpenAILLMClient, GrokLLMClient, MetacentrumLLMClient]
     ("error", "expected"),
     [
         (APITimeoutError(request=REQUEST), FailureKind.TIMEOUT),
-        (RateLimitError("slow down", response=httpx.Response(429, request=REQUEST), body=None), FailureKind.RATE_LIMIT),
+        (RateLimitError("slow down", response=httpx2.Response(429, request=REQUEST), body=None), FailureKind.RATE_LIMIT),
         (APIConnectionError(request=REQUEST), FailureKind.CONNECTION),
-        (APIStatusError("boom", response=httpx.Response(500, request=REQUEST), body=None), FailureKind.PROVIDER),
+        (APIStatusError("boom", response=httpx2.Response(500, request=REQUEST), body=None), FailureKind.PROVIDER),
         (ValueError("not from the sdk at all"), FailureKind.OTHER),
     ],
 )
@@ -56,7 +57,7 @@ def test_the_client_names_its_own_sdks_failures(client_class: type[LLMClient], e
 def test_a_wrapped_error_is_catchable_without_importing_anyones_sdk():
     """The point of wrapping. Catching a rate limit generically used to mean naming four SDKs' types at
     the call site; a kind that travels on the exception works for every provider at once."""
-    original = RateLimitError("slow down", response=httpx.Response(429, request=REQUEST), body=None)
+    original = RateLimitError("slow down", response=httpx2.Response(429, request=REQUEST), body=None)
 
     wrapped = as_call_error(original, FailureKind.RATE_LIMIT)
 
@@ -122,10 +123,10 @@ def test_only_throttling_conflicts_timeouts_and_server_faults_are_retryable(stat
 @pytest.mark.parametrize(
     ("error", "expected"),
     [
-        (BadRequestError("bad", response=httpx.Response(400, request=REQUEST), body=None), False),
-        (AuthenticationError("no", response=httpx.Response(401, request=REQUEST), body=None), False),
-        (RateLimitError("slow down", response=httpx.Response(429, request=REQUEST), body=None), True),
-        (APIStatusError("boom", response=httpx.Response(503, request=REQUEST), body=None), True),
+        (BadRequestError("bad", response=httpx2.Response(400, request=REQUEST), body=None), False),
+        (AuthenticationError("no", response=httpx2.Response(401, request=REQUEST), body=None), False),
+        (RateLimitError("slow down", response=httpx2.Response(429, request=REQUEST), body=None), True),
+        (APIStatusError("boom", response=httpx2.Response(503, request=REQUEST), body=None), True),
         (APIConnectionError(request=REQUEST), True),
         (APITimeoutError(request=REQUEST), True),
         (ValueError("not from the sdk at all"), False),
@@ -144,11 +145,11 @@ def _claude() -> ClaudeLLMClient:
 @pytest.mark.parametrize(
     ("error", "retried", "kind"),
     [
-        (anthropic.APIStatusError("overloaded", response=httpx.Response(529, request=REQUEST), body=None), True, FailureKind.PROVIDER),
-        (anthropic.InternalServerError("boom", response=httpx.Response(500, request=REQUEST), body=None), True, FailureKind.PROVIDER),
-        (anthropic.BadRequestError("bad", response=httpx.Response(400, request=REQUEST), body=None), False, FailureKind.PROVIDER),
-        (anthropic.AuthenticationError("no", response=httpx.Response(401, request=REQUEST), body=None), False, FailureKind.PROVIDER),
-        (anthropic.RateLimitError("slow down", response=httpx.Response(429, request=REQUEST), body=None), True, FailureKind.RATE_LIMIT),
+        (anthropic.APIStatusError("overloaded", response=httpx2.Response(529, request=REQUEST), body=None), True, FailureKind.PROVIDER),
+        (anthropic.InternalServerError("boom", response=httpx2.Response(500, request=REQUEST), body=None), True, FailureKind.PROVIDER),
+        (anthropic.BadRequestError("bad", response=httpx2.Response(400, request=REQUEST), body=None), False, FailureKind.PROVIDER),
+        (anthropic.AuthenticationError("no", response=httpx2.Response(401, request=REQUEST), body=None), False, FailureKind.PROVIDER),
+        (anthropic.RateLimitError("slow down", response=httpx2.Response(429, request=REQUEST), body=None), True, FailureKind.RATE_LIMIT),
         (anthropic.APITimeoutError(request=REQUEST), True, FailureKind.TIMEOUT),
         (anthropic.APIConnectionError(request=REQUEST), True, FailureKind.CONNECTION),
         (ValueError("not from the sdk at all"), False, FailureKind.OTHER),
@@ -248,7 +249,7 @@ def _generate(client: OpenAILLMClient):
 
 def test_a_rejected_request_is_attempted_once(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-    client, responses = _openai_client([BadRequestError("bad", response=httpx.Response(400, request=REQUEST), body=None)])
+    client, responses = _openai_client([BadRequestError("bad", response=httpx2.Response(400, request=REQUEST), body=None)])
 
     with pytest.raises(LLMCallError) as caught:
         _generate(client)
@@ -259,7 +260,7 @@ def test_a_rejected_request_is_attempted_once(monkeypatch):
 
 def test_a_throttled_request_uses_the_whole_retry_budget(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-    client, responses = _openai_client([RateLimitError("slow down", response=httpx.Response(429, request=REQUEST), body=None)])
+    client, responses = _openai_client([RateLimitError("slow down", response=httpx2.Response(429, request=REQUEST), body=None)])
 
     with pytest.raises(LLMRateLimited):
         _generate(client)

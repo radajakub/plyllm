@@ -14,7 +14,7 @@ import json
 from types import SimpleNamespace
 from typing import Any, cast
 
-import httpx
+import httpx2
 import pytest
 from anthropic import AsyncAnthropic, transform_schema
 from google.genai.client import AsyncClient
@@ -77,9 +77,9 @@ class _Recorder:
         self._body = body
         self.requests: list[dict[str, Any]] = []
 
-    def __call__(self, request: httpx.Request) -> httpx.Response:
+    def __call__(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(json.loads(request.content))
-        return httpx.Response(200, json=self._body)
+        return httpx2.Response(200, json=self._body)
 
 
 def _openai_body(content: list[dict[str, Any]]) -> dict[str, Any]:
@@ -102,7 +102,7 @@ def _openai_text(text: str) -> dict[str, Any]:
 
 
 def _openai_sdk(recorder: _Recorder) -> AsyncOpenAI:
-    return AsyncOpenAI(api_key="test", http_client=httpx.AsyncClient(transport=httpx.MockTransport(recorder)))
+    return AsyncOpenAI(api_key="test", http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(recorder)))
 
 
 def test_openai_sends_the_schema_responses_parse_would_send():
@@ -136,7 +136,7 @@ def _anthropic_body(content: list[dict[str, Any]], stop_reason: str = "end_turn"
 def _anthropic_sdk(recorder: _Recorder) -> AsyncAnthropic:
     # an explicit timeout, as ClaudeLLMClient.build() sets: with the SDK's default one, a non-streamed request
     # whose max_tokens suggests over ten minutes is refused before it is sent
-    return AsyncAnthropic(api_key="test", timeout=DEFAULT_TIMEOUT, http_client=httpx.AsyncClient(transport=httpx.MockTransport(recorder)))
+    return AsyncAnthropic(api_key="test", timeout=DEFAULT_TIMEOUT, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(recorder)))
 
 
 def test_claude_sends_the_schema_messages_parse_would_send():
@@ -235,7 +235,7 @@ def test_a_built_claude_client_sends_long_requests_without_streaming(monkeypatch
     real = AsyncAnthropic
 
     def with_mock_transport(**kwargs):
-        return real(**kwargs, http_client=httpx.AsyncClient(transport=httpx.MockTransport(recorder)))
+        return real(**kwargs, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(recorder)))
 
     monkeypatch.setattr("plyllm.providers.claude.client.AsyncAnthropic", with_mock_transport)
     client = ClaudeLLMClient.build(LLMConfig(claude=ClaudeProviderConfig(api_key="test")))
