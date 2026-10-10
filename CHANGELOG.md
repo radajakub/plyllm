@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-10
+
 ### Added
 
 - Repository setup: uv project, Makefile, CI (lint, typecheck, tests on Python 3.12 and 3.13, build
