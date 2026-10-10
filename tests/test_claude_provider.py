@@ -66,6 +66,13 @@ def test_haiku_5_5_takes_the_effort_path_unlike_haiku_4_5():
         model.extract_params(LLMCallOptions(thinking_enabled=False, temperature=0.3))
 
 
+def test_legacy_model_gets_the_full_high_budget_and_room_to_answer_by_default():
+    params = _model("claude-haiku-4.5").extract_params(LLMCallOptions(thinking_enabled=True, reasoning_effort="high"))
+
+    assert params["thinking"]["budget_tokens"] == 16384
+    assert params["max_tokens"] - params["thinking"]["budget_tokens"] >= 8192
+
+
 def test_thinking_budget_stays_below_max_tokens():
     params = _model("claude-haiku-4.5").extract_params(LLMCallOptions(thinking_enabled=True, reasoning_effort="high", max_tokens=3000))
 
