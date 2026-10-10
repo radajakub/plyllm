@@ -180,7 +180,6 @@ def claude_models() -> list[ClaudeLLMModel]:
             thinking=True,
             uses_effort=False,
             supports_temperature=True,
-            max_output_tokens=16000,
             supported_reasoning=_LEGACY_REASONING,
         ),
     ]
