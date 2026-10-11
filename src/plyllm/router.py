@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from collections.abc import Sequence
 
 from pydantic import BaseModel
 
+from plyllm.batch import DEFAULT_POLL_INTERVAL, BatchRequest, BatchStore
+from plyllm.batch_run import BatchRun, cancel_batches
 from plyllm.client import LLMClient
 from plyllm.llm_config import LLMConfig
 from plyllm.message import LLMMessage
@@ -114,6 +117,20 @@ class LLM:
             model_config.options,
             output_schema,
         )
+
+    def batch(
+        self,
+        model_config: ModelConfig,
+        requests: Sequence[BatchRequest],
+        store: BatchStore,
+        output_schema: type[BaseModel] | None = None,
+        wait: bool = False,
+        poll_interval: float = DEFAULT_POLL_INTERVAL,
+    ) -> BatchRun:
+        return BatchRun(self._route(model_config.provider), model_config.model_name, model_config.options, requests, store, output_schema, wait, poll_interval)
+
+    async def cancel_batches(self, provider: Provider, store: BatchStore) -> None:
+        await cancel_batches(self._route(provider), store)
 
     async def embed(self, model_config: EmbeddingModelConfig, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         return await self._route(model_config.provider).embed(model_config.model_name, texts, task)

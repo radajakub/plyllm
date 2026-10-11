@@ -1,3 +1,5 @@
+from plyllm.batch import DEFAULT_POLL_INTERVAL, BatchJob, BatchOutcome, BatchRequest, BatchStore, JsonBatchStore
+from plyllm.batch_run import BatchRun
 from plyllm.errors import FailureKind, LLMCallError, LLMRateLimited, LLMTimedOut
 from plyllm.llm_config import (
     DEFAULT_CONCURRENCY,
@@ -28,6 +30,13 @@ from plyllm.router import LLM
 from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 __all__ = [
+    "BatchJob",
+    "BatchOutcome",
+    "BatchRequest",
+    "BatchRun",
+    "BatchStore",
+    "JsonBatchStore",
+    "DEFAULT_POLL_INTERVAL",
     "FailureKind",
     "LLMCallError",
     "LLMRateLimited",

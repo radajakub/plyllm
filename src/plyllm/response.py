@@ -36,6 +36,8 @@ class LLMResponse:
     output_text: str
     # the pydantic schema the output_text conforms to, when structured output was requested
     structured_output_type: type[BaseModel] | None = None
+    # answered through a provider's Batch API, so priced at its batch rate: calculate_cost(..., batch=response.batch)
+    batch: bool = False
 
     @classmethod
     def from_parts(
