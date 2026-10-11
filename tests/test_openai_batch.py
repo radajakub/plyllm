@@ -114,6 +114,11 @@ class _FakeOpenAI:
             batch = self.batches[path.removeprefix("/v1/batches/").removesuffix("/cancel")]
             batch["status"] = "cancelling"
             return httpx2.Response(200, json=batch)
+        if method == "DELETE" and path.startswith("/v1/files/"):
+            file_id = path.removeprefix("/v1/files/")
+            if self.files.pop(file_id, None) is None:
+                return httpx2.Response(404, json={"error": {"message": f"No such File object: {file_id}"}})
+            return httpx2.Response(200, json={"id": file_id, "object": "file", "deleted": True})
         if method == "GET" and path.startswith("/v1/files/") and path.endswith("/content"):
             return httpx2.Response(200, content=self.files[path.removeprefix("/v1/files/").removesuffix("/content")])
         return httpx2.Response(404, json={"error": {"message": f"no fake for {method} {path}"}})
@@ -303,3 +308,38 @@ def test_the_store_records_the_openai_job(llm: LLM, store: JsonBatchStore):
         and job.model == "openai:gpt-5.4:thinking_enabled=True,reasoning_effort=high"
         and list(job.requests) == ["q1", "q2"]
     )
+
+
+# --- cleanup ----------------------------------------------------------------------------------------------------
+
+
+def test_collecting_deletes_the_uploaded_input_file_but_keeps_the_answers(llm: LLM, server: _FakeOpenAI, store: JsonBatchStore):
+    asyncio.run(_run(llm, store, _requests("q1")))
+    server.finish("batch_0", output=[_output_line("q1", 200, server.response_body)])
+
+    async def crash_while_saving() -> None:
+        async with llm.batch(_MODEL, _requests("q1"), store, output_schema=_Move):
+            raise OSError("disk full")
+
+    with pytest.raises(OSError):
+        asyncio.run(crash_while_saving())
+
+    # the input is gone after the first collect; the output file still serves the repeated one
+    assert "file-in-0" not in server.files
+    outcome = asyncio.run(_run(llm, store, _requests("q1")))
+    assert isinstance(outcome.results["q1"], LLMResponse) and server.calls.count(("DELETE", "/v1/files/file-in-0")) == 2
+
+
+def test_a_failed_cleanup_warns_and_still_returns_the_answers(llm: LLM, server: _FakeOpenAI, store: JsonBatchStore, monkeypatch: pytest.MonkeyPatch):
+    async def no_wait(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("plyllm.concurrency.asyncio.sleep", no_wait)
+    asyncio.run(_run(llm, store, _requests("q1")))
+    server.finish("batch_0", output=[_output_line("q1", 200, server.response_body)])
+    server.fail_next = {"/v1/files/file-in-0": 500}
+
+    with pytest.warns(UserWarning, match="Could not delete the batch input file file-in-0"):
+        outcome = asyncio.run(_run(llm, store, _requests("q1")))
+
+    assert isinstance(outcome.results["q1"], LLMResponse) and store.load() == []
