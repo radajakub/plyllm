@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncOpenAI
 
+# private: how the SDK turns response JSON into its types; a batch line's body goes through it, so the batch
+# path reads the same object generate() gets. A test pins it against SDK upgrades
+from openai._models import construct_type_unchecked
+
 # private: the helper responses.parse() uses to build the strict schema; a test pins it against SDK upgrades
 from openai.lib._parsing._responses import type_to_text_format_param
+from openai.types import Batch
 from openai.types.responses import Response
 from pydantic import BaseModel
 
+from plyllm.batch import BatchJob
 from plyllm.client import LLMClient
-from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.errors import FailureKind, LLMCallError, retryable_status, status_kind
 from plyllm.llm_config import DEFAULT_PROMPT_CACHE_KEY, LLMConfig
 from plyllm.message import LLMMessage
 from plyllm.model import EmbeddingModel
@@ -23,6 +30,40 @@ from plyllm.tokens import EmbeddingTokens, LLMTokens
 # APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
 # cover every failure the SDK raises for a request that was sent
 _RETRY_ERRORS = (APIConnectionError, APIStatusError)
+
+# the endpoint generate() calls; one batch carries requests to one endpoint
+_BATCH_ENDPOINT = "/v1/responses"
+# "up to 50,000 requests, and a batch input file can be up to 200 MB in size" (https://developers.openai.com/api/docs/guides/batch)
+_MAX_BATCH_REQUESTS = 50_000
+_MAX_BATCH_BYTES = 200 * 1024 * 1024
+# a batch in any of these has finished with every request it will ever finish; `failed` means its input
+# file failed validation and nothing ran
+_BATCH_ENDED = frozenset({"completed", "expired", "cancelled", "failed"})
+# the error codes the error file gives a request that never ran
+_UNRUN_KINDS = {"batch_expired": FailureKind.EXPIRED, "batch_cancelled": FailureKind.CANCELLED}
+
+
+def _batch_line(line: dict[str, Any]) -> Response | LLMCallError:
+    # one line of a batch's output or error file: {"custom_id", "response": {"status_code", "body"}, "error"}
+    error = line.get("error")
+    if error:
+        code = error.get("code")
+        return LLMCallError(_UNRUN_KINDS.get(code, FailureKind.PROVIDER), f"{code}: {error.get('message')}")
+    response = line["response"]
+    status, body = response["status_code"], response["body"]
+    if status != 200:
+        message = (body.get("error") or {}).get("message") if isinstance(body, dict) else body
+        return LLMCallError(status_kind(status), f"HTTP {status}: {message}")
+    return construct_type_unchecked(value=body, type_=Response)
+
+
+def _unrun(batch: Batch, job: BatchJob) -> dict[str, LLMCallError]:
+    # the error file should list every request an expired or cancelled batch never ran; this covers any it
+    # leaves out, which would otherwise look lost
+    kind = {"expired": FailureKind.EXPIRED, "cancelled": FailureKind.CANCELLED}.get(batch.status)
+    if kind is None:
+        return {}
+    return {request_id: LLMCallError(kind, f"Batch {job.batch_id} was {batch.status} before this request ran") for request_id in job.requests}
 
 
 def _reasoning_summaries(response: Any) -> list[str]:
@@ -59,6 +100,8 @@ def responses_tokens(usage: Any) -> LLMTokens:
 class OpenAILLMClient(LLMClient[OpenAILLMModel, Response]):
     provider_key = Provider.OPENAI
     _retry_errors = _RETRY_ERRORS
+    supports_batch = True
+    max_batch_requests = _MAX_BATCH_REQUESTS
 
     def __init__(self, client: AsyncOpenAI, concurrency: int | None = None, prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY) -> None:
         super().__init__(openai_models(), openai_embedding_models(), concurrency)
@@ -130,6 +173,42 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel, Response]):
             raise self._refused(model, refusal, refusal, reasoning, tokens)
 
         return self._answer(model, response.output_text, reasoning, tokens, output_schema)
+
+    async def _submit_batch(self, model: OpenAILLMModel, requests: list[tuple[str, dict[str, Any]]]) -> str:
+        # the model is in every line's body (from _request), so the batch itself needs none
+        lines = [json.dumps({"custom_id": request_id, "method": "POST", "url": _BATCH_ENDPOINT, "body": body}, ensure_ascii=False) for request_id, body in requests]
+        content = ("\n".join(lines) + "\n").encode()
+        if len(content) > _MAX_BATCH_BYTES:
+            raise ValueError(f"The batch input is {len(content) / 1024 / 1024:.1f} MB, over OpenAI's 200 MB limit; send fewer requests per call")
+        # the upload is retried like any call: a second copy of a file costs nothing. Creating the batch is not, since a create that timed out may have made a batch that runs, and bills, anyway
+        upload = await self._batch_api(lambda: self._client.files.create(file=("batch.jsonl", content), purpose="batch"))
+        batch = await self._client.batches.create(completion_window="24h", endpoint=_BATCH_ENDPOINT, input_file_id=upload.id)
+        return batch.id
+
+    async def _batch_ended(self, batch_id: str) -> bool:
+        batch = await self._client.batches.retrieve(batch_id)
+        return batch.status in _BATCH_ENDED
+
+    async def _batch_results(self, job: BatchJob) -> dict[str, Response | LLMCallError]:
+        assert job.batch_id is not None  # BatchRun collects only submitted jobs
+        batch = await self._client.batches.retrieve(job.batch_id)
+        if batch.status == "failed":
+            # the input file was rejected as a whole, so no request ran
+            errors = "; ".join(f"line {error.line}: {error.message}" for error in (batch.errors.data or [] if batch.errors else []))
+            return {request_id: LLMCallError(FailureKind.PROVIDER, f"Batch {job.batch_id} failed validation: {errors}") for request_id in job.requests}
+
+        results: dict[str, Response | LLMCallError] = {}
+        for file_id in (batch.output_file_id, batch.error_file_id):
+            if file_id is not None:
+                content = await self._client.files.content(file_id)
+                for text in content.text.splitlines():
+                    if text.strip():
+                        line = json.loads(text)
+                        results[line["custom_id"]] = _batch_line(line)
+        return {**_unrun(batch, job), **results}
+
+    async def _cancel_batch(self, batch_id: str) -> None:
+        await self._client.batches.cancel(batch_id)
 
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         response = await self._dispatch_embedding(
