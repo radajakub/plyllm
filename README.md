@@ -154,9 +154,10 @@ async with llm.batch(model, requests, store, output_schema=Verdict) as outcome:
     print(len(outcome.pending), "still running")
 ```
 
-- **Ids are the caller's keys**, unique within a call. A request whose id is already in a running job is not
-  sent again; the same id with another prompt, model or schema raises `ValueError`. Claude allows only
-  1-64 letters, digits, `-` and `_`.
+- **Ids are the caller's keys, per model config** (provider, model and options), so one store can run the same
+  ids for several models. A request whose id is already in a running job of its model config is not sent
+  again; the same id there with another prompt or schema raises `ValueError`. Claude allows only 1-64
+  letters, digits, `-` and `_`.
 - **Save the results inside the block.** Leaving it without an exception removes the collected jobs from the
   store, after which the same ids are new requests again. An exception keeps them, and the next run
   collects the same answers again, for free. `outcome.results` holds every request of a collected job, also

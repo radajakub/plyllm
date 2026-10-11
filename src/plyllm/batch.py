@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from plyllm.errors import LLMCallError
 from plyllm.message import LLMMessage
+from plyllm.model_config import ModelConfig
 from plyllm.providers.providers import Provider
 from plyllm.response import LLMResponse
 
@@ -21,7 +22,7 @@ from plyllm.response import LLMResponse
 DEFAULT_POLL_INTERVAL = 60.0
 # seconds between two attempts to take a store lock another run or coroutine holds
 _LOCK_RETRY = 0.1
-_STORE_VERSION = 1
+_STORE_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -35,20 +36,25 @@ class BatchRequest:
 @dataclass(frozen=True)
 class BatchJob:
     # one provider batch, as the store records it
-    provider: Provider
-    model_name: str
+    # the full model config string (provider:model:options); request ids are unique per model config, so one store
+    # can hold the same ids for several models
+    model: str
     # None between writing the record and the provider confirming the batch; see BatchRun._submit
     batch_id: str | None
     submitted_at: str  # ISO 8601, UTC
     # id -> request hash, in submission order (Gemini maps its results back by position)
     requests: dict[str, str]
 
+    @property
+    def provider(self) -> Provider:
+        return ModelConfig.from_string(self.model).provider
+
     def to_dict(self) -> dict[str, Any]:
-        return {"provider": self.provider.value, "model_name": self.model_name, "batch_id": self.batch_id, "submitted_at": self.submitted_at, "requests": self.requests}
+        return {"model": self.model, "batch_id": self.batch_id, "submitted_at": self.submitted_at, "requests": self.requests}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BatchJob:
-        return cls(Provider(data["provider"]), data["model_name"], data["batch_id"], data["submitted_at"], dict(data["requests"]))
+        return cls(data["model"], data["batch_id"], data["submitted_at"], dict(data["requests"]))
 
 
 @dataclass(frozen=True)
@@ -113,7 +119,8 @@ class JsonBatchStore:
 
 
 def request_hash(model_config: str, request: BatchRequest, output_schema: type[BaseModel] | None) -> str:
-    # what a request asks, independent of any SDK's request objects (Gemini's and Mistral's are not JSON).
+    # the whole request, independent of any SDK's request objects (Gemini's and Mistral's are not JSON). Ids are
+    # matched within one model config already; the model is hashed too, so a hash alone says what was asked.
     # The same id with another hash is another question, which must not get the answer to the first
     payload = {
         "model": model_config,

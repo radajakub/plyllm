@@ -91,7 +91,7 @@ async def batch(llm: LLM, config: ModelConfig, store: JsonBatchStore, count: int
 async def conflict(llm: LLM, config: ModelConfig, store: JsonBatchStore, schema: type[BaseModel] | None) -> int:
     # the stored ids with other prompts. Only stored ids are asked, so every one conflicts and nothing is sent
     async with store.lock():
-        ids = sorted(request_id for job in store.load() if job.provider is config.provider and job.model_name == config.model_name for request_id in job.requests)
+        ids = sorted(request_id for job in store.load() if job.model == config.to_string() for request_id in job.requests)
     if not ids:
         print("error: the store has no running jobs for this model; `run` first", file=sys.stderr)
         return 2
@@ -113,7 +113,7 @@ def status(store: JsonBatchStore) -> None:
     if not jobs:
         print("the store tracks no jobs")
     for job in jobs:
-        print(f"{job.provider.value}:{job.model_name} batch_id={job.batch_id} submitted_at={job.submitted_at} requests={list(job.requests)}")
+        print(f"{job.model} batch_id={job.batch_id} submitted_at={job.submitted_at} requests={list(job.requests)}")
 
 
 def main() -> int:

@@ -148,7 +148,7 @@ def test_new_requests_are_submitted_recorded_and_pending(store: JsonBatchStore):
     assert outcome.results == {} and outcome.pending == {"a", "b"}
     assert [body for _, body in client.batches["batch-0"]] == [{"system": "rules", "prompt": "go a"}, {"system": "rules", "prompt": "go b"}]
     [job] = store.load()
-    assert job.batch_id == "batch-0" and job.provider is Provider.OPENAI and job.model_name == "stub" and list(job.requests) == ["a", "b"]
+    assert job.batch_id == "batch-0" and job.provider is Provider.OPENAI and job.model == "openai:stub" and list(job.requests) == ["a", "b"]
 
 
 def test_a_second_run_does_not_resubmit_running_requests(store: JsonBatchStore):
@@ -296,15 +296,36 @@ def test_the_same_id_with_another_prompt_is_refused(store: JsonBatchStore):
     client = _FakeBatchClient()
     asyncio.run(_run(client, store, _requests("a")))
 
-    with pytest.raises(ValueError, match="another prompt, model or schema"):
+    with pytest.raises(ValueError, match="another prompt or schema"):
         asyncio.run(_run(client, store, _requests("a", prompt="changed")))
+
+
+def test_the_same_ids_run_for_several_model_configs_in_one_store(store: JsonBatchStore):
+    # comparing models on the same items: each model config has its own ids
+    client = _FakeBatchClient()
+    asyncio.run(_run(client, store, _requests("a", "b")))
+    asyncio.run(_run(client, store, _requests("a", "b"), options=LLMCallOptions(max_tokens=100)))
+
+    assert [(job.model, list(job.requests)) for job in store.load()] == [("openai:stub", ["a", "b"]), ("openai:stub:max_tokens=100", ["a", "b"])]
+    client.end_all()
+    outcome = asyncio.run(_run(client, store, _requests("a", "b"), options=LLMCallOptions(max_tokens=100)))
+
+    # collecting one model config leaves the other's job running
+    assert set(outcome.results) == {"a", "b"} and [job.model for job in store.load()] == ["openai:stub"]
+
+
+def test_the_request_hash_covers_the_model_config_too():
+    # ids are already matched within one model config; the hash still names the model, so it alone says what was asked
+    [request] = _requests("a")
+
+    assert request_hash("openai:stub", request, None) != request_hash("openai:stub:max_tokens=100", request, None)
 
 
 def test_the_same_id_with_another_schema_is_refused(store: JsonBatchStore):
     client = _FakeBatchClient()
     asyncio.run(_run(client, store, _requests("a")))
 
-    with pytest.raises(ValueError, match="another prompt, model or schema"):
+    with pytest.raises(ValueError, match="another prompt or schema"):
         asyncio.run(_run(client, store, _requests("a"), output_schema=_Move))
 
 
@@ -399,13 +420,16 @@ def test_the_router_hands_the_model_config_to_the_provider(store: JsonBatchStore
 
 
 def test_the_store_round_trips_and_leaves_no_temporary_file(store: JsonBatchStore, tmp_path: Path):
-    job = BatchJob(Provider.CLAUDE, "claude-opus-5", "msgbatch_1", "2026-10-11T10:00:00+00:00", {"a": "h1", "b": "h2"})
+    job = BatchJob("claude:claude-opus-5:thinking_enabled=True", "msgbatch_1", "2026-10-11T10:00:00+00:00", {"a": "h1", "b": "h2"})
 
     store.save([job])
 
     assert store.load() == [job]
     assert sorted(path.name for path in tmp_path.iterdir()) == ["batches.json"]
-    assert json.loads((tmp_path / "batches.json").read_text())["version"] == 1
+    stored = json.loads((tmp_path / "batches.json").read_text())
+    assert stored["version"] == 2
+    # the provider is read off the model config, not stored twice
+    assert set(stored["jobs"][0]) == {"model", "batch_id", "submitted_at", "requests"} and job.provider is Provider.CLAUDE
 
 
 def test_a_store_of_another_version_is_refused(store: JsonBatchStore, tmp_path: Path):

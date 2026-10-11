@@ -297,4 +297,9 @@ def test_the_store_records_the_openai_job(llm: LLM, store: JsonBatchStore):
     asyncio.run(_run(llm, store, _requests("q1", "q2")))
 
     [job] = store.load()
-    assert isinstance(job, BatchJob) and job.provider is Provider.OPENAI and job.model_name == "gpt-5.4" and list(job.requests) == ["q1", "q2"]
+    assert (
+        isinstance(job, BatchJob)
+        and job.provider is Provider.OPENAI
+        and job.model == "openai:gpt-5.4:thinking_enabled=True,reasoning_effort=high"
+        and list(job.requests) == ["q1", "q2"]
+    )
