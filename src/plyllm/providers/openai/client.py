@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import warnings
 from typing import Any
 
-from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncOpenAI
+from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncOpenAI, NotFoundError
 
 # private: how the SDK turns response JSON into its types; a batch line's body goes through it, so the batch
 # path reads the same object generate() gets. A test pins it against SDK upgrades
@@ -198,20 +199,34 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel, Response]):
     async def _batch_results(self, job: BatchJob) -> dict[str, Response | LLMCallError]:
         assert job.batch_id is not None  # BatchRun collects only submitted jobs
         batch = await self._client.batches.retrieve(job.batch_id)
+        results: dict[str, Response | LLMCallError]
         if batch.status == "failed":
             # the input file was rejected as a whole, so no request ran
             errors = "; ".join(f"line {error.line}: {error.message}" for error in (batch.errors.data or [] if batch.errors else []))
-            return {request_id: LLMCallError(FailureKind.PROVIDER, f"Batch {job.batch_id} failed validation: {errors}") for request_id in job.requests}
+            results = {request_id: LLMCallError(FailureKind.PROVIDER, f"Batch {job.batch_id} failed validation: {errors}") for request_id in job.requests}
+        else:
+            read: dict[str, Response | LLMCallError] = {}
+            for file_id in (batch.output_file_id, batch.error_file_id):
+                if file_id is not None:
+                    content = await self._client.files.content(file_id)
+                    for text in content.text.splitlines():
+                        if text.strip():
+                            line = json.loads(text)
+                            read[line["custom_id"]] = _batch_line(line)
+            results = {**_unrun(batch, job), **read}
+        await self._delete_input(batch.input_file_id)
+        return results
 
-        results: dict[str, Response | LLMCallError] = {}
-        for file_id in (batch.output_file_id, batch.error_file_id):
-            if file_id is not None:
-                content = await self._client.files.content(file_id)
-                for text in content.text.splitlines():
-                    if text.strip():
-                        line = json.loads(text)
-                        results[line["custom_id"]] = _batch_line(line)
-        return {**_unrun(batch, job), **results}
+    async def _delete_input(self, file_id: str) -> None:
+        # an ended batch never reads its input file again. The output and error files stay, so a collect repeated
+        # after the caller's block failed still works; it finds the input already gone. A failed cleanup must not
+        # cost the answers, so it only warns
+        try:
+            await self._client.files.delete(file_id)
+        except NotFoundError:
+            pass
+        except (APIStatusError, APIConnectionError) as error:
+            warnings.warn(f"Could not delete the batch input file {file_id}: {error}", stacklevel=2)
 
     async def _cancel_batch(self, batch_id: str) -> None:
         await self._client.batches.cancel(batch_id)

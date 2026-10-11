@@ -172,6 +172,7 @@ async with llm.batch(model, requests, store, output_schema=Verdict) as outcome:
   `flock` (POSIX only), so two runs never submit the same id twice. Any object with `lock`, `load` and `save`
   (`BatchStore`) can replace it.
 - Calls larger than a provider's limit are split into several batches, by request count and by size.
+  OpenAI's uploaded input file is deleted once its results are collected; the output files stay.
 - **If a submission times out**, the provider may have created the batch anyway. The store then keeps a
   record without a `batch_id`, and the next run that asks for those ids stops instead of paying twice:
   check the provider's batch list, then remove the record or fill in its `batch_id`.
