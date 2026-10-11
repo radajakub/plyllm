@@ -79,7 +79,8 @@ class BatchRun(Generic[ModelT, ResponseT]):
 
         async with self._store.lock():
             stored = self._store.load()
-            holder = {request_id: job for job in stored for request_id in job.requests}
+            # only this model config's jobs: the same ids may be running for other models
+            holder = {request_id: job for job in stored if job.model == model_config for request_id in job.requests}
             tracked: dict[str, BatchJob] = {}
             new: list[BatchRequest] = []
             for request in self._requests:
@@ -87,7 +88,7 @@ class BatchRun(Generic[ModelT, ResponseT]):
                 if job is None:
                     new.append(request)
                 elif job.requests[request.id] != hashes[request.id]:
-                    raise ValueError(f"Request {request.id} is already in a running batch with another prompt, model or schema; use a new id, or wait for that batch")
+                    raise ValueError(f"Request {request.id} is already in a running batch for {model_config} with another prompt or schema; use a new id, or wait for that batch")
                 elif job.batch_id is None:
                     raise RuntimeError(
                         f"Request {request.id} is in a batch whose submission never confirmed (submitted {job.submitted_at}). The provider may have "
@@ -99,7 +100,7 @@ class BatchRun(Generic[ModelT, ResponseT]):
             # all built before the first record is written, so a request the model rejects leaves nothing behind
             bodies = [(request.id, client._request(model, request.system, request.messages, self._options, self._output_schema)) for request in new]
             for chunk in _chunks(client, bodies):
-                record = BatchJob(client.provider_key, model.model_name, None, _now(), {request_id: hashes[request_id] for request_id, _ in chunk})
+                record = BatchJob(model_config, None, _now(), {request_id: hashes[request_id] for request_id, _ in chunk})
                 stored.append(record)
                 self._store.save(stored)
                 try:
