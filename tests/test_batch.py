@@ -40,6 +40,7 @@ class _FakeBatchClient(LLMClient[_StubModel, str]):
     _retry_errors = (ConnectionError,)
     supports_batch = True
     max_batch_requests = 2
+    max_batch_bytes = 1_000
 
     def __init__(self) -> None:
         models = [_StubModel("stub", "stub-v1", batch_ratio=0.5), _StubModel("no-batch-price", "no-batch-price-v1")]
@@ -76,6 +77,9 @@ class _FakeBatchClient(LLMClient[_StubModel, str]):
 
     def _parse(self, model: _StubModel, response: str, output_schema: type[BaseModel] | None) -> LLMResponse:
         return self._answer(model, response, [], LLMTokens(input_tokens=3, output_tokens=2), output_schema)
+
+    def _batch_size(self, request_id: str, body: dict[str, Any]) -> int:
+        return len(body["prompt"])
 
     async def _submit_batch(self, model: _StubModel, requests: list[tuple[str, dict[str, Any]]]) -> str:
         if self.submit_error is not None:
@@ -208,6 +212,18 @@ def test_a_collected_job_returns_ids_this_run_did_not_ask_for(store: JsonBatchSt
     outcome = asyncio.run(_run(client, store, _requests("a")))
 
     assert set(outcome.results) == {"a", "b"}
+
+
+def test_new_requests_are_split_at_the_provider_byte_limit(store: JsonBatchStore):
+    client = _FakeBatchClient()
+    client.max_batch_requests = 100
+    client.max_batch_bytes = 10
+    # prompts of 4, 4, 4 and 30 bytes: two fit under 10, and the one over the limit still gets its own batch
+    requests = [*_requests("a", "b", "c"), BatchRequest("long", LLMMessage.system("rules"), [LLMMessage.user("x" * 30)])]
+
+    asyncio.run(_run(client, store, requests))
+
+    assert [[request_id for request_id, _ in batch] for batch in client.batches.values()] == [["a", "b"], ["c"], ["long"]]
 
 
 def test_new_requests_are_split_at_the_provider_limit(store: JsonBatchStore):

@@ -1,15 +1,29 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
 from google import genai
 from google.genai.errors import APIError
-from google.genai.types import Content, ContentUnion, EmbedContentConfig, EmbedContentResponse, FinishReason, GenerateContentResponse, HttpOptions, Part
+from google.genai.types import (
+    BatchJob,
+    Content,
+    ContentUnion,
+    EmbedContentConfig,
+    EmbedContentResponse,
+    FinishReason,
+    GenerateContentConfig,
+    GenerateContentResponse,
+    HttpOptions,
+    InlinedRequest,
+    Part,
+)
 from pydantic import BaseModel
 
+from plyllm.batch import BatchJob as StoredBatchJob
 from plyllm.client import LLMClient
-from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.errors import FailureKind, LLMCallError, retryable_status, status_kind
 from plyllm.llm_config import LLMConfig
 from plyllm.message import LLMMessage
 from plyllm.model import EmbeddingModel
@@ -26,6 +40,18 @@ _RETRY_ERRORS = (APIError, httpx.TransportError)
 _ROLE_MAP = {"user": "user", "assistant": "model", "system": "user"}
 # finish reasons that mean the answer was withheld on policy grounds, not cut short or failed
 _BLOCKED_FINISH = frozenset({FinishReason.SAFETY, FinishReason.BLOCKLIST, FinishReason.PROHIBITED_CONTENT, FinishReason.SPII, FinishReason.RECITATION})
+# inline requests "keep the total request size under 20MB" (https://ai.google.dev/gemini-api/docs/batch-api). _batch_size
+# estimates a request from its JSON, while the SDK sends camelCase keys inside its own wrapper, so the limit keeps
+# a 10% margin. The docs give no request count for inline batches; the size limit binds first
+_MAX_BATCH_BYTES = 18 * 1000 * 1000
+_MAX_BATCH_REQUESTS = 100_000
+# what the wrapper and the camelCase keys add to each request beyond _inline_size's JSON: 40-70 bytes measured
+# on the SDK's own request; a fixed 100 keeps small requests, where it is ~15%, from slipping under the margin
+_REQUEST_OVERHEAD = 100
+# inline requests have no id field, so each carries its id in the metadata the response echoes back
+_ID_KEY = "plyllm_id"
+# a job that ended without running every request; the docs say an expired job has no results at all
+_UNRUN_KINDS = {"JOB_STATE_EXPIRED": FailureKind.EXPIRED, "JOB_STATE_CANCELLED": FailureKind.CANCELLED, "JOB_STATE_FAILED": FailureKind.PROVIDER}
 
 
 def _total_tokens(response: GenerateContentResponse) -> int:
@@ -34,6 +60,28 @@ def _total_tokens(response: GenerateContentResponse) -> int:
     if usage is None:
         return 0
     return (usage.prompt_token_count or 0) + (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
+
+
+def _inline_size(request_id: str, body: dict[str, Any]) -> int:
+    # the config holds the schema as a pydantic class, which does not dump to JSON, so it is counted as its JSON schema
+    config: GenerateContentConfig = body["config"]
+    schema = config.response_schema
+    payload = {
+        "contents": [content.model_dump(mode="json", exclude_none=True) for content in body["contents"]],
+        "config": config.model_dump(mode="json", exclude_none=True, exclude={"response_schema"}),
+        "schema": schema.model_json_schema() if isinstance(schema, type) and issubclass(schema, BaseModel) else None,
+        "metadata": {_ID_KEY: request_id},
+    }
+    return len(json.dumps(payload, ensure_ascii=False).encode()) + _REQUEST_OVERHEAD
+
+
+def _unrun(job: BatchJob, stored: StoredBatchJob) -> dict[str, LLMCallError]:
+    state = job.state.name if job.state is not None else None
+    kind = _UNRUN_KINDS.get(state or "")
+    if kind is None:
+        return {}
+    reason = f": {job.error.message}" if job.error is not None and job.error.message else ""
+    return {request_id: LLMCallError(kind, f"Batch {stored.batch_id} ended as {state} before this request ran{reason}") for request_id in stored.requests}
 
 
 def _blocked(response: GenerateContentResponse) -> str | None:
@@ -76,6 +124,9 @@ def _embedding_tokens(response: EmbedContentResponse, texts: list[str]) -> int:
 class GeminiLLMClient(LLMClient[GeminiLLMModel, GenerateContentResponse]):
     provider_key = Provider.GEMINI
     _retry_errors = _RETRY_ERRORS
+    supports_batch = True
+    max_batch_requests = _MAX_BATCH_REQUESTS
+    max_batch_bytes = _MAX_BATCH_BYTES
 
     def __init__(self, client: genai.client.AsyncClient, concurrency: int | None = None, http_client: httpx.AsyncClient | None = None) -> None:
         super().__init__(gemini_models(), gemini_embedding_models(), concurrency)
@@ -162,6 +213,42 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel, GenerateContentResponse]):
             raise self._refused(model, blocked, output_text, reasoning, tokens)
 
         return self._answer(model, output_text, reasoning, tokens, output_schema)
+
+    def _batch_size(self, request_id: str, body: dict[str, Any]) -> int:
+        return _inline_size(request_id, body)
+
+    async def _submit_batch(self, model: GeminiLLMModel, requests: list[tuple[str, dict[str, Any]]]) -> str:
+        # inline requests carry no model; the job names it once
+        src = [InlinedRequest(contents=body["contents"], config=body["config"], metadata={_ID_KEY: request_id}) for request_id, body in requests]
+        job = await self._client.batches.create(model=model.model_string, src=src)
+        if job.name is None:
+            raise ValueError("Gemini created a batch without a name")
+        return job.name
+
+    async def _batch_ended(self, batch_id: str) -> bool:
+        job = await self._client.batches.get(name=batch_id)
+        return job.done
+
+    async def _batch_results(self, job: StoredBatchJob) -> dict[str, GenerateContentResponse | LLMCallError]:
+        assert job.batch_id is not None  # BatchRun collects only submitted jobs
+        remote = await self._client.batches.get(name=job.batch_id)
+        responses = remote.dest.inlined_responses if remote.dest is not None else None
+        ids = list(job.requests)
+        results: dict[str, GenerateContentResponse | LLMCallError] = {}
+        for index, item in enumerate(responses or []):
+            # the echoed id, else the position: inline responses come back in input order
+            request_id = (item.metadata or {}).get(_ID_KEY) or (ids[index] if index < len(ids) else None)
+            if request_id is None:
+                continue
+            if item.response is not None:
+                results[request_id] = item.response
+            else:
+                error = item.error
+                results[request_id] = LLMCallError(FailureKind.PROVIDER, f"code {error.code if error else None}: {error.message if error else 'no response and no error'}")
+        return {**_unrun(remote, job), **results}
+
+    async def _cancel_batch(self, batch_id: str) -> None:
+        await self._client.batches.cancel(name=batch_id)
 
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         # one Content per text: passing bare parts would return a single aggregated vector instead

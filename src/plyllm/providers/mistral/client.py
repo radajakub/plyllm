@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import json
+import sys
 from typing import Any
 
 import httpx2
 from mistralai.client import Mistral
 from mistralai.client.errors import MistralError
-from mistralai.client.models import AssistantMessage, BaseModelCard, ChatCompletionResponse, FTModelCard, TextChunk, ThinkChunk, UsageInfo
+from mistralai.client.models import AssistantMessage, BaseModelCard, BatchJob, ChatCompletionRequest, ChatCompletionResponse, FTModelCard, TextChunk, ThinkChunk, UsageInfo
+from mistralai.client.utils.serializers import marshal_json, unmarshal
 from mistralai.extra import response_format_from_pydantic_model
 from pydantic import BaseModel
 
+from plyllm.batch import BatchJob as StoredBatchJob
 from plyllm.client import LLMClient
-from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.errors import FailureKind, LLMCallError, retryable_status, status_kind
 from plyllm.llm_config import DEFAULT_PROMPT_CACHE_KEY, LLMConfig
 from plyllm.message import LLMMessage
 from plyllm.options import LLMCallOptions
@@ -22,6 +26,16 @@ from plyllm.tokens import LLMTokens
 # MistralError covers every HTTP failure, so the status predicate below decides what is worth
 # retrying; NoResponseError and httpx2 failures (the SDK's transport since mistralai 3) are transport-level and always are
 _RETRY_ERRORS = (MistralError, httpx2.TimeoutException, httpx2.TransportError)
+# the endpoint generate() calls; one batch carries requests to one endpoint
+_BATCH_ENDPOINT = "/v1/chat/completions"
+# "For batches with less than 10k requests, we support inline batching" (https://docs.mistral.ai/studio/batch-processing);
+# larger calls are split into several jobs, of which Mistral allows any number. The docs give no size limit
+_MAX_BATCH_REQUESTS = 9_999
+_MAX_BATCH_BYTES = sys.maxsize
+# a job in any of these has finished with every request it will ever finish
+_BATCH_ENDED = frozenset({"SUCCESS", "FAILED", "TIMEOUT_EXCEEDED", "CANCELLED"})
+# a job that ended without running every request
+_UNRUN_KINDS = {"TIMEOUT_EXCEEDED": FailureKind.EXPIRED, "CANCELLED": FailureKind.CANCELLED, "FAILED": FailureKind.PROVIDER}
 
 
 def _is_retryable(error: Exception) -> bool:
@@ -54,6 +68,37 @@ def total_tokens(response: ChatCompletionResponse) -> int:
     return usage.total_tokens or (usage.prompt_tokens or 0) + (usage.completion_tokens or 0)
 
 
+def _batch_body(kwargs: dict[str, Any]) -> dict[str, Any]:
+    # the JSON chat.complete_async() sends for these kwargs, through the SDK's own request model and serializer
+    return json.loads(marshal_json(ChatCompletionRequest(**kwargs), ChatCompletionRequest))
+
+
+def _batch_line(line: dict[str, Any]) -> ChatCompletionResponse | LLMCallError:
+    # one line of a job's output or error file: {"custom_id", "response": {"status_code", "body"}, "error"}. The docs
+    # show only the output line, so an error is read as a dict with a message or as plain text
+    error = line.get("error")
+    if error:
+        message = error.get("message", error) if isinstance(error, dict) else error
+        return LLMCallError(FailureKind.PROVIDER, str(message))
+    response = line.get("response") or {}
+    status, body = response.get("status_code"), response.get("body")
+    if status != 200 or not isinstance(body, dict):
+        message = (body.get("message") or body.get("error")) if isinstance(body, dict) else body
+        return LLMCallError(status_kind(status), f"HTTP {status}: {message}")
+    # how the SDK reads a chat completion
+    return unmarshal(body, ChatCompletionResponse)
+
+
+def _unrun(remote: BatchJob, job: StoredBatchJob) -> dict[str, LLMCallError]:
+    kind = _UNRUN_KINDS.get(remote.status)
+    if kind is None:
+        return {}
+    reasons = "; ".join(f"{error.message} (x{error.count})" for error in remote.errors)
+    return {
+        request_id: LLMCallError(kind, f"Batch {job.batch_id} ended as {remote.status} before this request ran{': ' + reasons if reasons else ''}") for request_id in job.requests
+    }
+
+
 def split_content(message: AssistantMessage | None) -> tuple[list[str], str]:
     # with reasoning active the content is a chunk list (thinking + text); otherwise a plain string
     if message is None or message.content is None:
@@ -74,6 +119,9 @@ def split_content(message: AssistantMessage | None) -> tuple[list[str], str]:
 class MistralLLMClient(LLMClient[MistralLLMModel, ChatCompletionResponse]):
     provider_key = Provider.MISTRAL
     _retry_errors = _RETRY_ERRORS
+    supports_batch = True
+    max_batch_requests = _MAX_BATCH_REQUESTS
+    max_batch_bytes = _MAX_BATCH_BYTES
 
     def __init__(self, client: Mistral, concurrency: int | None = None, prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY) -> None:
         super().__init__(mistral_models(), [], concurrency)
@@ -133,3 +181,39 @@ class MistralLLMClient(LLMClient[MistralLLMModel, ChatCompletionResponse]):
         reasoning, output_text = split_content(choice.message if choice is not None else None)
 
         return self._answer(model, output_text, reasoning, completion_tokens(response.usage), output_schema)
+
+    def _batch_size(self, request_id: str, body: dict[str, Any]) -> int:
+        return len(json.dumps({"custom_id": request_id, "body": _batch_body(body)}, ensure_ascii=False).encode())
+
+    async def _submit_batch(self, model: MistralLLMModel, requests: list[tuple[str, dict[str, Any]]]) -> str:
+        # each body keeps its model, as generate() sends it; the docs make it optional once the job names one
+        job = await self._client.batch.jobs.create_async(
+            endpoint=_BATCH_ENDPOINT,
+            model=model.model_string,
+            requests=[{"custom_id": request_id, "body": _batch_body(body)} for request_id, body in requests],
+        )
+        return job.id
+
+    async def _batch_ended(self, batch_id: str) -> bool:
+        job = await self._client.batch.jobs.get_async(job_id=batch_id)
+        return job.status in _BATCH_ENDED
+
+    async def _batch_results(self, job: StoredBatchJob) -> dict[str, ChatCompletionResponse | LLMCallError]:
+        assert job.batch_id is not None  # BatchRun collects only submitted jobs
+        remote = await self._client.batch.jobs.get_async(job_id=job.batch_id)
+        results: dict[str, ChatCompletionResponse | LLMCallError] = {}
+        for file_id in (remote.output_file, remote.error_file):
+            if file_id:
+                download = await self._client.files.download_async(file_id=file_id)
+                try:
+                    content = (await download.aread()).decode()
+                finally:
+                    await download.aclose()
+                for text in content.splitlines():
+                    if text.strip():
+                        line = json.loads(text)
+                        results[line["custom_id"]] = _batch_line(line)
+        return {**_unrun(remote, job), **results}
+
+    async def _cancel_batch(self, batch_id: str) -> None:
+        await self._client.batch.jobs.cancel_async(job_id=batch_id)

@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Generic
+from typing import Any, Generic
 
 from pydantic import BaseModel
 
@@ -96,15 +96,14 @@ class BatchRun(Generic[ModelT, ResponseT]):
                 else:
                     tracked[job.batch_id] = job
 
-            for start in range(0, len(new), client.max_batch_requests):
-                chunk = new[start : start + client.max_batch_requests]
-                # built before the record is written, so a request the model rejects leaves nothing behind
-                bodies = [(request.id, client._request(model, request.system, request.messages, self._options, self._output_schema)) for request in chunk]
-                record = BatchJob(client.provider_key, model.model_name, None, _now(), {request.id: hashes[request.id] for request in chunk})
+            # all built before the first record is written, so a request the model rejects leaves nothing behind
+            bodies = [(request.id, client._request(model, request.system, request.messages, self._options, self._output_schema)) for request in new]
+            for chunk in _chunks(client, bodies):
+                record = BatchJob(client.provider_key, model.model_name, None, _now(), {request_id: hashes[request_id] for request_id, _ in chunk})
                 stored.append(record)
                 self._store.save(stored)
                 try:
-                    batch_id = await client._submit_batch(model, bodies)
+                    batch_id = await client._submit_batch(model, chunk)
                 except Exception as error:
                     kind = client.error_kind(error)
                     if kind in (FailureKind.TIMEOUT, FailureKind.CONNECTION):
@@ -115,7 +114,7 @@ class BatchRun(Generic[ModelT, ResponseT]):
                         stored.remove(record)
                         self._store.save(stored)
                     if kind is FailureKind.OTHER:
-                        raise  # not the provider's answer, e.g. a ValueError for an input over its limits
+                        raise  # not the provider's answer, e.g. a ValueError the provider client raised itself
                     raise as_call_error(error, kind) from error
                 submitted = replace(record, batch_id=batch_id)
                 stored[stored.index(record)] = submitted
@@ -157,6 +156,24 @@ async def cancel_batches(client: LLMClient[ModelT, ResponseT], store: BatchStore
         jobs = store.load()
     for batch_id in [job.batch_id for job in jobs if job.provider is client.provider_key and job.batch_id is not None]:
         await client._batch_api(lambda batch_id=batch_id: client._cancel_batch(batch_id))
+
+
+def _chunks(client: LLMClient[ModelT, ResponseT], bodies: list[tuple[str, dict[str, Any]]]) -> list[list[tuple[str, dict[str, Any]]]]:
+    # in order, each as full as the provider's limits allow. A request over the byte limit on its own still
+    # gets a batch, for the provider to reject with its own reason
+    chunks: list[list[tuple[str, dict[str, Any]]]] = []
+    current: list[tuple[str, dict[str, Any]]] = []
+    size = 0
+    for request_id, body in bodies:
+        body_size = client._batch_size(request_id, body)
+        if current and (len(current) == client.max_batch_requests or size + body_size > client.max_batch_bytes):
+            chunks.append(current)
+            current, size = [], 0
+        current.append((request_id, body))
+        size += body_size
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 def _now() -> str:

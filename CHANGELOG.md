@@ -6,7 +6,21 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+
+- Batch API for OpenAI, Claude, Gemini and Mistral: `llm.batch(model, requests, store)` submits new requests,
+  collects ended jobs and reports the rest as pending, so a script can be rerun until every answer is in.
+  `JsonBatchStore` keeps the running jobs in one JSON file. Requests carry exactly the body `generate` sends
+  and their answers are parsed the same way. See the README, "Batch API".
+- `LLMResponse.batch` marks an answer from a batch, to be priced with `calculate_cost(..., batch=True)`.
+- `FailureKind.EXPIRED` (`batch_expired`) and `FailureKind.CANCELLED` (`batch_cancelled`) for batch
+  requests that never ran.
+
 ### Changed
+
+- `LLMClient` takes the SDK response type as a second type parameter, and `generate` is now one method in
+  the base class built from per-provider `_request`, `_send`, `_tokens_of` and `_parse`. A subclass outside
+  this package must implement these instead of `generate`.
 
 - Provider SDKs raised to new majors: `openai>=3.28.0,<4`, `anthropic>=1.13.0,<2`, `mistralai>=3.2.0,<4`.
   All three now use httpx2 instead of httpx.

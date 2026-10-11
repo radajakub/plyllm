@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+import json
+import re
+from typing import Any, Literal, cast
 
 from anthropic import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncAnthropic, transform_schema
 from anthropic.types import Message, MessageParam, TextBlockParam, Usage
+from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
+from anthropic.types.messages.batch_create_params import Request
 from pydantic import BaseModel
 
+from plyllm.batch import BatchJob
 from plyllm.client import LLMClient
-from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.errors import FailureKind, LLMCallError, retryable_status, status_kind
 from plyllm.llm_config import LLMConfig
 from plyllm.message import LLMMessage, MessageRole
 from plyllm.options import LLMCallOptions
@@ -23,6 +28,13 @@ AnthropicRoles = Literal["user", "assistant", "system"]
 _RETRY_ERRORS = (APIConnectionError, APIStatusError)
 # the messages array only carries the conversation; the system prompt is a separate request field
 _ROLE_MAP: dict[MessageRole, AnthropicRoles] = {"user": "user", "assistant": "assistant", "system": "user"}
+# "up to 100,000 Message requests or 256 MB in size, whichever is reached first"
+# (https://platform.claude.com/docs/en/build-with-claude/batch-processing)
+_MAX_BATCH_REQUESTS = 100_000
+_MAX_BATCH_BYTES = 256 * 1024 * 1024
+_CUSTOM_ID = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+# the error of a request that failed inside a batch, by its type; the rest are the request's or the account's fault
+_BATCH_ERROR_KINDS = {"rate_limit_error": FailureKind.RATE_LIMIT, "timeout_error": FailureKind.TIMEOUT}
 
 
 def _thinking_summaries(message: Message) -> list[str]:
@@ -55,6 +67,9 @@ def message_tokens(usage: Usage) -> LLMTokens:
 class ClaudeLLMClient(LLMClient[ClaudeLLMModel, Message]):
     provider_key = Provider.CLAUDE
     _retry_errors = _RETRY_ERRORS
+    supports_batch = True
+    max_batch_requests = _MAX_BATCH_REQUESTS
+    max_batch_bytes = _MAX_BATCH_BYTES
 
     def __init__(self, client: AsyncAnthropic, concurrency: int | None = None) -> None:
         super().__init__(claude_models(), [], concurrency)
@@ -123,3 +138,42 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel, Message]):
             raise self._refused(model, f"category {category}", output_text, reasoning, tokens)
 
         return self._answer(model, output_text, reasoning, tokens, output_schema)
+
+    def _check_batch_id(self, request_id: str) -> None:
+        if not _CUSTOM_ID.match(request_id):
+            raise ValueError(f"Claude batch ids are 1-64 letters, digits, '-' or '_'; got {request_id!r}")
+
+    def _batch_size(self, request_id: str, body: dict[str, Any]) -> int:
+        # the request's share of the create call's JSON body, which the size limit counts
+        return len(json.dumps({"custom_id": request_id, "params": body}, ensure_ascii=False).encode()) + 1
+
+    async def _submit_batch(self, model: ClaudeLLMModel, requests: list[tuple[str, dict[str, Any]]]) -> str:
+        # the model is in every request's params (from _request), so the batch itself needs none
+        # the params are the kwargs generate() passes to messages.create
+        batch = await self._client.messages.batches.create(
+            requests=[Request(custom_id=request_id, params=cast(MessageCreateParamsNonStreaming, body)) for request_id, body in requests]
+        )
+        return batch.id
+
+    async def _batch_ended(self, batch_id: str) -> bool:
+        batch = await self._client.messages.batches.retrieve(batch_id)
+        return batch.processing_status == "ended"
+
+    async def _batch_results(self, job: BatchJob) -> dict[str, Message | LLMCallError]:
+        assert job.batch_id is not None  # BatchRun collects only submitted jobs
+        results: dict[str, Message | LLMCallError] = {}
+        async for item in await self._client.messages.batches.results(job.batch_id):
+            result = item.result
+            if result.type == "succeeded":
+                results[item.custom_id] = result.message
+            elif result.type == "errored":
+                error = result.error.error
+                results[item.custom_id] = LLMCallError(_BATCH_ERROR_KINDS.get(error.type, FailureKind.PROVIDER), f"{error.type}: {error.message}")
+            elif result.type == "expired":
+                results[item.custom_id] = LLMCallError(FailureKind.EXPIRED, f"Batch {job.batch_id} expired before this request ran")
+            else:
+                results[item.custom_id] = LLMCallError(FailureKind.CANCELLED, f"Batch {job.batch_id} was cancelled before this request ran")
+        return results
+
+    async def _cancel_batch(self, batch_id: str) -> None:
+        await self._client.messages.batches.cancel(batch_id)
