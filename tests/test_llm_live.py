@@ -22,7 +22,11 @@ from pydantic import BaseModel
 
 from plyllm import (
     LLM,
+    Choice,
+    ChoiceAnswer,
+    ChoiceOption,
     ClaudeProviderConfig,
+    DecisionModelConfig,
     GeminiProviderConfig,
     GrokProviderConfig,
     LLMConfig,
@@ -33,6 +37,8 @@ from plyllm import (
     MistralProviderConfig,
     ModelConfig,
     OpenAIProviderConfig,
+    Predicate,
+    PredicateAnswer,
     Provider,
 )
 
@@ -130,7 +136,7 @@ def test_every_active_model_is_still_served(llm: LLM, provider: Provider):
     """A model the provider stopped serving fails a run with a 400 that reads like an outage. It is marked
     `retired=True` in its models.py instead of deleted, so recorded results still load and cost."""
     _require(llm, provider)
-    models = [*llm.get_available_models(provider), *llm.get_available_embedding_models(provider)]
+    models = [*llm.get_available_models(provider), *llm.get_available_embedding_models(provider), *llm.get_available_decision_models(provider)]
     active = {model.model_string for model in models if not model.retired}
     retired = {model.model_string for model in models if model.retired}
 
@@ -178,3 +184,23 @@ def test_a_structured_answer(llm: LLM, live_costs: list[float], case: str):
 
     assert response.resolve_structured_output(_Answer).answer == 4, response.output_text
     _check(llm, config, response, live_costs)
+
+
+@pytest.mark.live
+def test_a_decision(llm: LLM, live_costs: list[float]):
+    # input tokens only, so this costs a few hundredths of a cent
+    config = DecisionModelConfig(Provider.OPENAI, "gpt-6-luna")
+    _require(llm, config.provider)
+    questions = [
+        Predicate("even", "Is the number in the input even?"),
+        Choice("parity", "Which parity does the number in the input have?", [ChoiceOption("even"), ChoiceOption("odd")]),
+    ]
+
+    response = _run(llm, llm.decide(config, "4", questions))
+
+    even, parity = response.answers
+    assert isinstance(even, PredicateAnswer) and even.probability > 0.5, even
+    assert isinstance(parity, ChoiceAnswer) and parity.choice == "even", parity
+    assert response.model_string.startswith(llm.resolve_decision_model(config.provider, config.model_name).model_string), response.model_string
+    assert response.tokens.input_tokens > 0, response.tokens
+    live_costs.append(llm.calculate_decision_cost(config, response.tokens))

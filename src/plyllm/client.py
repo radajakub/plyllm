@@ -9,14 +9,15 @@ from pydantic import BaseModel, ValidationError
 
 from plyllm.batch import BatchJob
 from plyllm.concurrency import ProviderSemaphore, safe_call
+from plyllm.decision import Choice, DecisionQuestion, Score, check_questions
 from plyllm.errors import FailureKind, LLMCallError, as_call_error
 from plyllm.llm_config import DEFAULT_CONCURRENCY, LLMConfig
 from plyllm.message import LLMMessage
-from plyllm.model import RETIRED_MESSAGE, EmbeddingModel, EmbeddingTask, LLMModel
+from plyllm.model import RETIRED_MESSAGE, DecisionModel, EmbeddingModel, EmbeddingTask, LLMModel
 from plyllm.options import LLMCallOptions
 from plyllm.providers.providers import Provider
 from plyllm.rate_limit import ModelLimits, RateGate, estimate_prompt_tokens, make_gate
-from plyllm.response import EmbeddingBatch, EmbeddingResponse, LLMResponse
+from plyllm.response import DecisionResponse, EmbeddingBatch, EmbeddingResponse, LLMResponse
 from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 # `safe_call` keeps this as its own default; naming it here is what lets a client lower it
@@ -41,9 +42,17 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
     max_batch_requests: int
     max_batch_bytes: int
 
-    def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int | None = None, retries: int = DEFAULT_RETRIES) -> None:
+    def __init__(
+        self,
+        models: Sequence[ModelT],
+        embedding_models: Sequence[EmbeddingModel],
+        concurrency: int | None = None,
+        retries: int = DEFAULT_RETRIES,
+        decision_models: Sequence[DecisionModel] = (),
+    ) -> None:
         self._models: dict[str, ModelT] = {model.model_name: model for model in models}
         self._embedding_models: dict[str, EmbeddingModel] = {model.model_name: model for model in embedding_models}
+        self._decision_models: dict[str, DecisionModel] = {model.model_name: model for model in decision_models}
         self._semaphore = ProviderSemaphore(concurrency if concurrency is not None else self.default_concurrency)
         # the SDKs retry inside each of these, so the two counts multiply: a provider that stalls needs a
         # lower number here rather than a longer timeout there
@@ -52,6 +61,8 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
         self._gates: dict[str, RateGate] = {name: make_gate(model.limits) for name, model in self._models.items()}
         # embedding endpoints carry their own quotas, so they get gates independent of the chat models
         self._embedding_gates: dict[str, RateGate] = {name: make_gate(model.limits) for name, model in self._embedding_models.items()}
+        # likewise the decision endpoints, though a decision model may share its name with a chat model
+        self._decision_gates: dict[str, RateGate] = {name: make_gate(model.limits) for name, model in self._decision_models.items()}
 
     @classmethod
     @abstractmethod
@@ -91,17 +102,29 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
             raise ValueError(f"Embedding model {model_name} not found for provider {self.provider_key.value}")
         return model
 
+    def resolve_decision_model(self, model_name: str) -> DecisionModel:
+        model = self._decision_models.get(model_name, None)
+        if model is None:
+            raise ValueError(f"Decision model {model_name} not found for provider {self.provider_key.value}")
+        return model
+
     def get_available_models(self) -> list[ModelT]:
         return list(self._models.values())
 
     def get_available_embedding_models(self) -> list[EmbeddingModel]:
         return list(self._embedding_models.values())
 
+    def get_available_decision_models(self) -> list[DecisionModel]:
+        return list(self._decision_models.values())
+
     def calculate_cost(self, model_name: str, tokens: LLMTokens, batch: bool = False) -> float:
         return self.resolve_model(model_name).cost(tokens, batch)
 
     def calculate_embedding_cost(self, model_name: str, tokens: EmbeddingTokens) -> float:
         return self.resolve_embedding_model(model_name).cost(tokens)
+
+    def calculate_decision_cost(self, model_name: str, tokens: LLMTokens) -> float:
+        return self.resolve_decision_model(model_name).cost(tokens)
 
     def set_concurrency(self, concurrency: int | None) -> None:
         self._semaphore.configure(concurrency)
@@ -111,6 +134,9 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
 
     def embedding_gate(self, model: EmbeddingModel) -> RateGate:
         return self._embedding_gates[model.model_name]
+
+    def decision_gate(self, model: DecisionModel) -> RateGate:
+        return self._decision_gates[model.model_name]
 
     def set_model_limits(self, model_name: str, limits: ModelLimits | None) -> None:
         model = self.resolve_model(model_name)
@@ -122,6 +148,11 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
         model = self.resolve_embedding_model(model_name)
         model.limits = limits
         self._embedding_gates[model_name] = make_gate(limits)
+
+    def set_decision_model_limits(self, model_name: str, limits: ModelLimits | None) -> None:
+        model = self.resolve_decision_model(model_name)
+        model.limits = limits
+        self._decision_gates[model_name] = make_gate(limits)
 
     def _token_estimate(self, model: LLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions) -> int:
         prompt_tokens = estimate_prompt_tokens(system.content, *(message.content for message in messages))
@@ -138,9 +169,18 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
         tokens_of: Callable[[T], int] | None = None,
     ) -> T:
         estimate = self._token_estimate(model, system, messages, options)
-        gate = self.gate(model)
+        return await self._paced(self.gate(model), estimate, task, retry_errors, tokens_of)
+
+    async def _paced(
+        self,
+        gate: RateGate,
+        estimate: int,
+        task: Callable[[], Awaitable[T]],
+        retry_errors: tuple[type[Exception], ...],
+        tokens_of: Callable[[T], int] | None = None,
+    ) -> T:
         try:
-            # generation and embeddings share one retry rule per provider: `_should_retry_on_error`
+            # generation, embeddings and decisions share one retry rule per provider: `_should_retry_on_error`
             return await self._semaphore.run(
                 lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=self._should_retry_on_error, retries=self._retries)
             )
@@ -159,13 +199,27 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
     ) -> T:
         # embeddings have no output side, so the reservation is the input estimate alone
         estimate = estimate_prompt_tokens(*texts)
-        gate = self.embedding_gate(model)
-        try:
-            return await self._semaphore.run(
-                lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=self._should_retry_on_error, retries=self._retries)
-            )
-        except Exception as error:
-            raise as_call_error(error, self.error_kind(error)) from error
+        return await self._paced(self.embedding_gate(model), estimate, task, retry_errors, tokens_of)
+
+    async def _dispatch_decision(
+        self,
+        model: DecisionModel,
+        input: str,
+        questions: Sequence[DecisionQuestion],
+        task: Callable[[], Awaitable[T]],
+        retry_errors: tuple[type[Exception], ...],
+        tokens_of: Callable[[T], int] | None = None,
+    ) -> T:
+        # the questions are read as input too, and a decision has no billed output, so the reservation is
+        # the input estimate alone
+        texts = [input]
+        for question in questions:
+            texts.append(question.instructions)
+            if isinstance(question, Choice):
+                texts.extend(f"{option.value} {option.description or ''}" for option in question.options)
+            elif isinstance(question, Score):
+                texts.extend(f"{level.label} {level.description or ''}" for level in question.levels)
+        return await self._paced(self.decision_gate(model), estimate_prompt_tokens(*texts), task, retry_errors, tokens_of)
 
     def _answer(self, model: LLMModel, output_text: str, reasoning: list[str], tokens: LLMTokens, output_schema: type[BaseModel] | None) -> LLMResponse:
         if output_schema is None:
@@ -287,3 +341,18 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
     async def _embed_batch(self, model: EmbeddingModel, texts: list[str]) -> EmbeddingBatch:
         # only reached by providers that register embedding models, and those override it
         raise NotImplementedError(f"{self.provider_key.value} embeddings are not supported in this package")
+
+    async def decide(self, model_name: str, input: str, questions: Sequence[DecisionQuestion]) -> DecisionResponse:
+        # questions with a fixed set of answers about one shared text; each comes back as a probability, a
+        # choice or a score, not as generated text
+        if not self._decision_models:
+            raise NotImplementedError(f"{self.provider_key.value} decisions are not supported in this package")
+        model = self.resolve_decision_model(model_name)
+        if model.retired:
+            raise ValueError(RETIRED_MESSAGE.format(name=model.model_name))
+        check_questions(questions)
+        return await self._decide(model, input, list(questions))
+
+    async def _decide(self, model: DecisionModel, input: str, questions: list[DecisionQuestion]) -> DecisionResponse:
+        # only reached by providers that register decision models, and those override it
+        raise NotImplementedError(f"{self.provider_key.value} decisions are not supported in this package")

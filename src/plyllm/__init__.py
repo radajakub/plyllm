@@ -1,5 +1,20 @@
 from plyllm.batch import DEFAULT_POLL_INTERVAL, BatchJob, BatchOutcome, BatchRequest, BatchStore, JsonBatchStore
 from plyllm.batch_run import BatchRun
+from plyllm.decision import (
+    Choice,
+    ChoiceAnswer,
+    ChoiceOption,
+    ChoiceValue,
+    DecisionAnswer,
+    DecisionQuestion,
+    Predicate,
+    PredicateAnswer,
+    RefusedAnswer,
+    Score,
+    ScoreAnswer,
+    ScoreLevel,
+    ScoreProbability,
+)
 from plyllm.errors import FailureKind, LLMCallError, LLMRateLimited, LLMTimedOut
 from plyllm.llm_config import (
     DEFAULT_CONCURRENCY,
@@ -13,12 +28,13 @@ from plyllm.llm_config import (
     OpenAIProviderConfig,
 )
 from plyllm.message import LLMMessage, MessageRole
-from plyllm.model import EmbeddingModel, EmbeddingTask, LLMModel
-from plyllm.model_config import EmbeddingModelConfig, ModelConfig, options_to_string, parse_options
+from plyllm.model import DecisionModel, EmbeddingModel, EmbeddingTask, LLMModel
+from plyllm.model_config import DecisionModelConfig, EmbeddingModelConfig, ModelConfig, options_to_string, parse_options
 from plyllm.options import LLMCallOptions, ReasoningEffort
 from plyllm.providers.providers import Provider
 from plyllm.rate_limit import ModelLimits
 from plyllm.response import (
+    DecisionResponse,
     EmbeddingBatch,
     EmbeddingResponse,
     LLMResponse,
@@ -56,8 +72,10 @@ __all__ = [
     "LLMModel",
     "EmbeddingModel",
     "EmbeddingTask",
+    "DecisionModel",
     "ModelConfig",
     "EmbeddingModelConfig",
+    "DecisionModelConfig",
     "options_to_string",
     "parse_options",
     "ModelLimits",
@@ -70,6 +88,20 @@ __all__ = [
     "OutputText",
     "EmbeddingResponse",
     "EmbeddingBatch",
+    "DecisionResponse",
+    "Predicate",
+    "Choice",
+    "ChoiceOption",
+    "ChoiceValue",
+    "Score",
+    "ScoreLevel",
+    "DecisionQuestion",
+    "PredicateAnswer",
+    "ChoiceAnswer",
+    "ScoreAnswer",
+    "ScoreProbability",
+    "RefusedAnswer",
+    "DecisionAnswer",
     "LLMTokens",
     "EmbeddingTokens",
 ]

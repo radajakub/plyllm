@@ -83,6 +83,21 @@ class EmbeddingModel(ABC):
         raise NotImplementedError
 
 
+class DecisionModel:
+    def __init__(self, model_name: str, model_string: str, input_cost: float, limits: ModelLimits | None = None, retired: bool = False) -> None:
+        self.model_name = model_name  # stable internal alias, used in configs/results
+        self.model_string = model_string  # exact vendor id sent to the API
+        self.input_cost = input_cost  # USD per 1M input tokens
+        # per-model quota; None means only the provider-wide semaphore applies
+        self.limits = limits
+        self.retired = retired
+
+    def cost(self, tokens: LLMTokens) -> float:
+        # a decision bills its input alone, at one rate: the output, reasoning, cache-read and cache-write
+        # tokens it reports carry no charge
+        return tokens.input_tokens / MILLION * self.input_cost
+
+
 class LLMModel(ABC):
     def __init__(
         self,

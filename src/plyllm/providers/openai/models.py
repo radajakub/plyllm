@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from plyllm.model import EmbeddingModel, EmbeddingTask, LLMModel, TemperatureSupport
+from plyllm.model import DecisionModel, EmbeddingModel, EmbeddingTask, LLMModel, TemperatureSupport
 from plyllm.options import LLMCallOptions, ReasoningEffort
 
 # GPT-5.4 / 5.5 standard models (docs also list none, which is what thinking off sends)
@@ -161,3 +161,9 @@ def openai_embedding_models() -> list[EmbeddingModel]:
         OpenAIEmbeddingModel("text-embedding-3-small", "text-embedding-3-small", context_size=8191, input_cost=0.02, max_batch_size=_EMBEDDING_BATCH_SIZE),
         OpenAIEmbeddingModel("text-embedding-3-large", "text-embedding-3-large", context_size=8191, input_cost=0.13, max_batch_size=_EMBEDDING_BATCH_SIZE),
     ]
+
+
+def openai_decision_models() -> list[DecisionModel]:
+    # "You pay only for input tokens: there are no cache-read, cache-write, or output-token charges"
+    # (https://developers.openai.com/api/docs/guides/decisions)
+    return [DecisionModel("gpt-6-luna", "gpt-6-luna", input_cost=0.1)]
