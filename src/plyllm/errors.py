@@ -17,6 +17,8 @@ class FailureKind(ExtendedEnum):
     REFUSAL = "refusal"  # the model declined to answer, or the provider blocked the answer
     NO_OUTPUT = "no_structured_output"  # the call succeeded and carried no parsed object
     STALE_CACHE = "stale_cache"  # a cached answer no longer matches the schema it was stored under
+    EXPIRED = "batch_expired"  # a batch request the provider did not reach before the batch expired
+    CANCELLED = "batch_cancelled"  # a batch request that never ran because its batch was cancelled
     OTHER = "other"
 
 

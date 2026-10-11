@@ -7,6 +7,7 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from plyllm.batch import BatchJob
 from plyllm.concurrency import ProviderSemaphore, safe_call
 from plyllm.errors import FailureKind, LLMCallError, as_call_error
 from plyllm.llm_config import DEFAULT_CONCURRENCY, LLMConfig
@@ -33,6 +34,10 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
     default_concurrency: int = DEFAULT_CONCURRENCY
     # the SDK exceptions a failed generation may be retried on; `_should_retry_on_error` decides which instances are
     _retry_errors: tuple[type[Exception], ...]
+    # a provider with a batch API sets both and implements the _batch hooks; BatchRun refuses the others
+    supports_batch: bool = False
+    # requests one provider batch may hold; a larger call is split into several batches
+    max_batch_requests: int
 
     def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int | None = None, retries: int = DEFAULT_RETRIES) -> None:
         self._models: dict[str, ModelT] = {model.model_name: model for model in models}
@@ -217,6 +222,35 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
     def _parse(self, model: ModelT, response: ResponseT, output_schema: type[BaseModel] | None) -> LLMResponse:
         # the SDK's response object into an LLMResponse; raises LLMCallError for a refusal or an answer off the schema
         raise NotImplementedError
+
+    async def _batch_api(self, task: Callable[[], Awaitable[T]]) -> T:
+        # status checks, downloads and cancels can be repeated safely, so they get the usual retries. They bypass
+        # the semaphore and the rate gates, which pace generation, not a provider's batch endpoints
+        try:
+            return await safe_call(task, retry_errors=self._retry_errors, retry_if=self._should_retry_on_error, retries=self._retries)
+        except Exception as error:
+            raise as_call_error(error, self.error_kind(error)) from error
+
+    def _check_batch_id(self, request_id: str) -> None:
+        # a provider with rules for its request ids raises ValueError here, before anything is sent
+        return None
+
+    async def _submit_batch(self, model: ModelT, requests: list[tuple[str, dict[str, Any]]]) -> str:
+        # one provider batch from (id, _request kwargs) pairs; returns its batch id. Not retried: a create that
+        # timed out may still have made the batch (see BatchRun._submit)
+        raise NotImplementedError(f"{self.provider_key.value} batches are not supported in this package")
+
+    async def _batch_ended(self, batch_id: str) -> bool:
+        # True once the provider has finished with every request, however each one ended
+        raise NotImplementedError(f"{self.provider_key.value} batches are not supported in this package")
+
+    async def _batch_results(self, job: BatchJob) -> dict[str, ResponseT | LLMCallError]:
+        # the SDK response per id, which BatchRun reads with _parse, or the error of a request that failed,
+        # expired or was cancelled
+        raise NotImplementedError(f"{self.provider_key.value} batches are not supported in this package")
+
+    async def _cancel_batch(self, batch_id: str) -> None:
+        raise NotImplementedError(f"{self.provider_key.value} batches are not supported in this package")
 
     async def embed(self, model_name: str, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         # task formatting, context guarding and batching are provider-independent; _embed_batch only
