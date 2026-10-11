@@ -114,6 +114,8 @@ class BatchRun(Generic[ModelT, ResponseT]):
                     else:
                         stored.remove(record)
                         self._store.save(stored)
+                    if kind is FailureKind.OTHER:
+                        raise  # not the provider's answer, e.g. a ValueError for an input over its limits
                     raise as_call_error(error, kind) from error
                 submitted = replace(record, batch_id=batch_id)
                 stored[stored.index(record)] = submitted
