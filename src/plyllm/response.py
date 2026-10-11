@@ -5,6 +5,7 @@ from typing import TypeVar, overload
 
 from pydantic import BaseModel
 
+from plyllm.decision import DecisionAnswer
 from plyllm.providers.providers import Provider
 from plyllm.tokens import EmbeddingTokens, LLMTokens
 
@@ -84,3 +85,19 @@ class EmbeddingResponse:
     model_string: str
     embeddings: list[list[float]]
     tokens: EmbeddingTokens
+
+
+@dataclass(frozen=True)
+class DecisionResponse:
+    provider: Provider
+    model_string: str
+    # one per question, in question order
+    answers: list[DecisionAnswer]
+    # all of them as the provider reports them, though a decision may bill only input_tokens (see DecisionModel.cost)
+    tokens: LLMTokens
+
+    def answer(self, name: str) -> DecisionAnswer:
+        for answer in self.answers:
+            if answer.name == name:
+                return answer
+        raise KeyError(f"No answer for question {name}")

@@ -12,20 +12,30 @@ from openai._models import construct_type_unchecked
 
 # private: the helper responses.parse() uses to build the strict schema; a test pins it against SDK upgrades
 from openai.lib._parsing._responses import type_to_text_format_param
-from openai.types import Batch
+from openai.types import Batch, Decision
+from openai.types.decision import Answer, AnswerAnswerResourceChoice, AnswerAnswerResourcePredicate, AnswerAnswerResourceScore
+from openai.types.decision_create_params import (
+    Question,
+    QuestionQuestionParamChoice,
+    QuestionQuestionParamChoiceChoice,
+    QuestionQuestionParamPredicate,
+    QuestionQuestionParamScore,
+    QuestionQuestionParamScoreLevel,
+)
 from openai.types.responses import Response
 from pydantic import BaseModel
 
 from plyllm.batch import BatchJob
 from plyllm.client import LLMClient
+from plyllm.decision import Choice, ChoiceAnswer, DecisionAnswer, DecisionQuestion, Predicate, PredicateAnswer, RefusedAnswer, ScoreAnswer, ScoreProbability
 from plyllm.errors import FailureKind, LLMCallError, retryable_status, status_kind
 from plyllm.llm_config import DEFAULT_PROMPT_CACHE_KEY, LLMConfig
 from plyllm.message import LLMMessage
-from plyllm.model import EmbeddingModel
+from plyllm.model import DecisionModel, EmbeddingModel
 from plyllm.options import LLMCallOptions
-from plyllm.providers.openai.models import OpenAILLMModel, openai_embedding_models, openai_models
+from plyllm.providers.openai.models import OpenAILLMModel, openai_decision_models, openai_embedding_models, openai_models
 from plyllm.providers.providers import Provider
-from plyllm.response import EmbeddingBatch, LLMResponse
+from plyllm.response import DecisionResponse, EmbeddingBatch, LLMResponse
 from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 # APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
@@ -42,6 +52,10 @@ _MAX_BATCH_BYTES = 200 * 1024 * 1024
 _BATCH_ENDED = frozenset({"completed", "expired", "cancelled", "failed"})
 # the error codes the error file gives a request that never ran
 _UNRUN_KINDS = {"batch_expired": FailureKind.EXPIRED, "batch_cancelled": FailureKind.CANCELLED}
+# "Provide between 2 and 255 choices. Each choice must be unique."
+# (https://developers.openai.com/api/reference/resources/decisions/methods/create)
+_MIN_CHOICES = 2
+_MAX_CHOICES = 255
 
 
 def _input_line(request_id: str, body: dict[str, Any]) -> bytes:
@@ -70,6 +84,46 @@ def _unrun(batch: Batch, job: BatchJob) -> dict[str, LLMCallError]:
     if kind is None:
         return {}
     return {request_id: LLMCallError(kind, f"Batch {job.batch_id} was {batch.status} before this request ran") for request_id in job.requests}
+
+
+def _question(question: DecisionQuestion) -> Question:
+    # one entry of the request's questions, as /v1/decisions takes it
+    if isinstance(question, Predicate):
+        return QuestionQuestionParamPredicate(type="predicate", name=question.name, instructions=question.instructions)
+    if isinstance(question, Choice):
+        # typed: the string "true" and the boolean True are different choices
+        values = [(type(option.value), option.value) for option in question.options]
+        if not _MIN_CHOICES <= len(values) <= _MAX_CHOICES:
+            raise ValueError(f"Choice question {question.name} has {len(values)} options; OpenAI takes {_MIN_CHOICES} to {_MAX_CHOICES}")
+        if len(set(values)) != len(values):
+            raise ValueError(f"Choice question {question.name} repeats an option value; OpenAI needs each to be unique")
+        choices: list[QuestionQuestionParamChoiceChoice] = []
+        for option in question.options:
+            choice = QuestionQuestionParamChoiceChoice(value=option.value)
+            if option.description is not None:
+                choice["description"] = option.description
+            choices.append(choice)
+        return QuestionQuestionParamChoice(type="choice", name=question.name, instructions=question.instructions, choices=choices)
+    levels: list[QuestionQuestionParamScoreLevel] = []
+    for level in question.levels:
+        param = QuestionQuestionParamScoreLevel(label=level.label)
+        if level.description is not None:
+            param["description"] = level.description
+        levels.append(param)
+    return QuestionQuestionParamScore(type="score", name=question.name, instructions=question.instructions, levels=levels)
+
+
+def _decision_answer(answer: Answer, name: str) -> DecisionAnswer:
+    # the questions all carry names, so the API echoes them back; the name is taken from the question
+    # anyway, since answers come in question order
+    if isinstance(answer, AnswerAnswerResourcePredicate):
+        return PredicateAnswer(name, answer.probability)
+    if isinstance(answer, AnswerAnswerResourceChoice):
+        return ChoiceAnswer(name, answer.choice, answer.confidence, {item.value: item.probability for item in answer.probabilities})
+    if isinstance(answer, AnswerAnswerResourceScore):
+        probabilities = [ScoreProbability(item.label, item.value, item.probability) for item in answer.probabilities]
+        return ScoreAnswer(name, answer.score, answer.confidence, probabilities)
+    return RefusedAnswer(name)
 
 
 def _reasoning_summaries(response: Any) -> list[str]:
@@ -111,7 +165,7 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel, Response]):
     max_batch_bytes = _MAX_BATCH_BYTES
 
     def __init__(self, client: AsyncOpenAI, concurrency: int | None = None, prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY) -> None:
-        super().__init__(openai_models(), openai_embedding_models(), concurrency)
+        super().__init__(openai_models(), openai_embedding_models(), concurrency, decision_models=openai_decision_models())
         self._client = client
         self._prompt_cache_key = prompt_cache_key
 
@@ -248,3 +302,19 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel, Response]):
         items = sorted(response.data, key=lambda item: item.index)
         total_tokens = response.usage.total_tokens if response.usage is not None else 0
         return EmbeddingBatch([item.embedding for item in items], EmbeddingTokens(total_tokens))
+
+    async def _decide(self, model: DecisionModel, input: str, questions: list[DecisionQuestion]) -> DecisionResponse:
+        bodies = [_question(question) for question in questions]
+        response: Decision = await self._dispatch_decision(
+            model,
+            input,
+            questions,
+            lambda: self._client.decisions.create(model=model.model_string, input=input, questions=bodies),
+            _RETRY_ERRORS,
+            tokens_of=lambda result: result.usage.input_tokens,
+        )
+        if len(response.answers) != len(questions):
+            # without this the caller silently pairs answers with the wrong questions
+            raise ValueError(f"{self.provider_key.value} returned {len(response.answers)} answers for {len(questions)} questions; answers cannot be aligned to their questions")
+        answers = [_decision_answer(answer, question.name) for answer, question in zip(response.answers, questions)]
+        return DecisionResponse(self.provider_key, response.model, answers, responses_tokens(response.usage))

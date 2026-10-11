@@ -181,6 +181,35 @@ A batch request carries exactly the body `generate` sends, and its answer is rea
 two transports measure the same thing. Grok is not supported: its batch API differs from OpenAI's and the
 result format for Responses requests is not documented.
 
+### Decisions API
+
+OpenAI's Decisions API answers questions with a fixed set of answers about one text, instead of generating
+text: `Predicate` gives the probability that a statement is true, `Choice` picks one of the given options and
+`Score` rates against ordered levels. `Choice` and `Score` also return a probability for each option or level.
+Only `openai:gpt-6-luna` serves it, and it bills input tokens only.
+
+```python
+from plyllm import Choice, ChoiceOption, DecisionModelConfig, Predicate, Provider
+
+model = DecisionModelConfig(Provider.OPENAI, "gpt-6-luna")
+questions = [
+    Predicate("damaged", "Is the item damaged?"),
+    Choice("department", "Which department should handle this?", [ChoiceOption("billing"), ChoiceOption("shipping", "Delivery problems")]),
+]
+response = await llm.decide(model, "The parcel arrived torn.", questions)
+print(response.answer("department"), llm.calculate_decision_cost(model, response.tokens))
+```
+
+- Every question needs a unique `name`. Answers come back in question order, and `response.answer(name)`
+  finds one by name.
+- The model can refuse a single question. That answer is a `RefusedAnswer`, and the other answers are kept.
+- Input is text only. The API also takes images, which this package does not send.
+- A choice question needs 2 to 255 options with distinct values. A value is a string or a boolean, and
+  `"true"` and `True` are different options.
+- `response.tokens` records every token count the API reports, including output and reasoning tokens.
+  Only `input_tokens` is billed.
+- Decisions are not available through the Batch API.
+
 ### HuggingFace (local models)
 
 The HuggingFace provider runs models locally instead of calling a remote API — it exposes

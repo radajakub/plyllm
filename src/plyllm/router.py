@@ -9,13 +9,14 @@ from pydantic import BaseModel
 from plyllm.batch import DEFAULT_POLL_INTERVAL, BatchRequest, BatchStore
 from plyllm.batch_run import BatchRun, cancel_batches
 from plyllm.client import LLMClient
+from plyllm.decision import DecisionQuestion
 from plyllm.llm_config import LLMConfig
 from plyllm.message import LLMMessage
-from plyllm.model import EmbeddingModel, EmbeddingTask, LLMModel
-from plyllm.model_config import EmbeddingModelConfig, ModelConfig
+from plyllm.model import DecisionModel, EmbeddingModel, EmbeddingTask, LLMModel
+from plyllm.model_config import DecisionModelConfig, EmbeddingModelConfig, ModelConfig
 from plyllm.providers.providers import Provider
 from plyllm.rate_limit import ModelLimits
-from plyllm.response import EmbeddingResponse, LLMResponse
+from plyllm.response import DecisionResponse, EmbeddingResponse, LLMResponse
 from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 # Each provider SDK is an optional extra. Import a provider only when it is configured.
@@ -73,6 +74,9 @@ class LLM:
     def get_available_embedding_models(self, provider: Provider) -> list[EmbeddingModel]:
         return self._route(provider).get_available_embedding_models()
 
+    def get_available_decision_models(self, provider: Provider) -> list[DecisionModel]:
+        return self._route(provider).get_available_decision_models()
+
     async def aclose(self) -> None:
         # closes every provider's connection pool; await it at the end of the asyncio.run() that used them
         await asyncio.gather(*(client.aclose() for client in self._provider_map.values()))
@@ -86,12 +90,18 @@ class LLM:
     def resolve_embedding_model(self, provider: Provider, model_name: str) -> EmbeddingModel:
         return self._route(provider).resolve_embedding_model(model_name)
 
+    def resolve_decision_model(self, provider: Provider, model_name: str) -> DecisionModel:
+        return self._route(provider).resolve_decision_model(model_name)
+
     def calculate_cost(self, model_config: ModelConfig, tokens: LLMTokens, batch: bool = False) -> float:
         # batch=True prices the tokens at the provider's Batch API rate
         return self._route(model_config.provider).calculate_cost(model_config.model_name, tokens, batch)
 
     def calculate_embedding_cost(self, model_config: EmbeddingModelConfig, tokens: EmbeddingTokens) -> float:
         return self._route(model_config.provider).calculate_embedding_cost(model_config.model_name, tokens)
+
+    def calculate_decision_cost(self, model_config: DecisionModelConfig, tokens: LLMTokens) -> float:
+        return self._route(model_config.provider).calculate_decision_cost(model_config.model_name, tokens)
 
     def set_concurrency(self, provider: Provider, concurrency: int | None) -> None:
         self._route(provider).set_concurrency(concurrency)
@@ -101,6 +111,9 @@ class LLM:
 
     def set_embedding_model_limits(self, provider: Provider, model_name: str, limits: ModelLimits | None) -> None:
         self._route(provider).set_embedding_model_limits(model_name, limits)
+
+    def set_decision_model_limits(self, provider: Provider, model_name: str, limits: ModelLimits | None) -> None:
+        self._route(provider).set_decision_model_limits(model_name, limits)
 
     async def generate(
         self,
@@ -134,3 +147,6 @@ class LLM:
 
     async def embed(self, model_config: EmbeddingModelConfig, texts: list[str], task: EmbeddingTask) -> EmbeddingResponse:
         return await self._route(model_config.provider).embed(model_config.model_name, texts, task)
+
+    async def decide(self, model_config: DecisionModelConfig, input: str, questions: Sequence[DecisionQuestion]) -> DecisionResponse:
+        return await self._route(model_config.provider).decide(model_config.model_name, input, questions)

@@ -71,3 +71,9 @@ class ModelConfig:
 class EmbeddingModelConfig:
     provider: Provider
     model_name: str
+
+
+@dataclass(frozen=True)
+class DecisionModelConfig:
+    provider: Provider
+    model_name: str

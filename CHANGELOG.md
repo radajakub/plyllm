@@ -8,6 +8,10 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Added
 
+- OpenAI Decisions API: `llm.decide(DecisionModelConfig(Provider.OPENAI, "gpt-6-luna"), text, questions)`
+  answers `Predicate`, `Choice` and `Score` questions with probabilities instead of generated text, as a
+  `DecisionResponse`. A refused question comes back as a `RefusedAnswer` beside the other answers. Text input
+  only. `calculate_decision_cost` bills input tokens only. See the README, "Decisions API".
 - Batch API for OpenAI, Claude, Gemini and Mistral: `llm.batch(model, requests, store)` submits new requests,
   collects ended jobs and reports the rest as pending, so a script can be rerun until every answer is in.
   `JsonBatchStore` keeps the running jobs in one JSON file. Requests carry exactly the body `generate` sends
