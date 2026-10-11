@@ -34,10 +34,12 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
     default_concurrency: int = DEFAULT_CONCURRENCY
     # the SDK exceptions a failed generation may be retried on; `_should_retry_on_error` decides which instances are
     _retry_errors: tuple[type[Exception], ...]
-    # a provider with a batch API sets both and implements the _batch hooks; BatchRun refuses the others
+    # a provider with a batch API sets these and implements the _batch hooks; BatchRun refuses the others
     supports_batch: bool = False
-    # requests one provider batch may hold; a larger call is split into several batches
+    # what one provider batch may hold: requests, and bytes as _batch_size counts them. A larger call is split
+    # into several batches
     max_batch_requests: int
+    max_batch_bytes: int
 
     def __init__(self, models: Sequence[ModelT], embedding_models: Sequence[EmbeddingModel], concurrency: int | None = None, retries: int = DEFAULT_RETRIES) -> None:
         self._models: dict[str, ModelT] = {model.model_name: model for model in models}
@@ -230,6 +232,10 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
             return await safe_call(task, retry_errors=self._retry_errors, retry_if=self._should_retry_on_error, retries=self._retries)
         except Exception as error:
             raise as_call_error(error, self.error_kind(error)) from error
+
+    def _batch_size(self, request_id: str, body: dict[str, Any]) -> int:
+        # the bytes one request adds to a provider batch, as the provider counts them against max_batch_bytes
+        raise NotImplementedError(f"{self.provider_key.value} batches are not supported in this package")
 
     def _check_batch_id(self, request_id: str) -> None:
         # a provider with rules for its request ids raises ValueError here, before anything is sent

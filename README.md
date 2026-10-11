@@ -135,6 +135,50 @@ And it gains nothing measurable here: each call waits seconds to minutes for the
 overhead does not matter. genai does not close a client it was given, so `LLM.aclose()` closes this one
 itself.
 
+### Batch API
+
+OpenAI, Claude, Gemini and Mistral answer batch jobs at a lower price (half, for all four), in minutes to a day
+instead of seconds. `llm.batch` sends independent requests that way. A batch can outlive the process that sent
+it, so a run does what it can now and reports the rest: it submits the new requests, collects the jobs that have
+ended and leaves the others pending. Running the same script again continues where it stopped.
+
+```python
+from plyllm import BatchRequest, JsonBatchStore
+
+store = JsonBatchStore("batches.json")  # the jobs still at the provider; never the answers
+requests = [BatchRequest(key, system, [LLMMessage.user(prompt)]) for key, prompt in uncached]
+
+async with llm.batch(model, requests, store, output_schema=Verdict) as outcome:
+    for key, result in outcome.results.items():  # LLMResponse, or LLMCallError for a failed request
+        cache[key] = result  # save inside the block
+    print(len(outcome.pending), "still running")
+```
+
+- **Ids are the caller's keys**, unique within a call. A request whose id is already in a running job is not
+  sent again; the same id with another prompt, model or schema raises `ValueError`. Claude allows only
+  1-64 letters, digits, `-` and `_`.
+- **Save the results inside the block.** Leaving it without an exception removes the collected jobs from the
+  store, after which the same ids are new requests again. An exception keeps them, and the next run
+  collects the same answers again, for free. `outcome.results` holds every request of a collected job, also
+  ones this call did not pass.
+- **Each request ends on its own:** an `LLMResponse` with `batch=True` (price it with
+  `calculate_cost(..., batch=response.batch)`), or an `LLMCallError` whose `kind` is `refusal`,
+  `unparseable`, `rate_limit`, `provider_error`, `batch_expired` or `batch_cancelled`.
+- `wait=True` checks every `poll_interval` seconds (default 60) until every job has ended, instead of
+  returning with requests pending. `llm.cancel_batches(provider, store)` stops a provider's running jobs;
+  the next run collects them.
+- **One store, any number of runs.** `JsonBatchStore` is one JSON file: written atomically and locked with
+  `flock` (POSIX only), so two runs never submit the same id twice. Any object with `lock`, `load` and `save`
+  (`BatchStore`) can replace it.
+- Calls larger than a provider's limit are split into several batches, by request count and by size.
+- **If a submission times out**, the provider may have created the batch anyway. The store then keeps a
+  record without a `batch_id`, and the next run that asks for those ids stops instead of paying twice:
+  check the provider's batch list, then remove the record or fill in its `batch_id`.
+
+A batch request carries exactly the body `generate` sends, and its answer is read by the same code, so the
+two transports measure the same thing. Grok is not supported: its batch API differs from OpenAI's and the
+result format for Responses requests is not documented.
+
 ### HuggingFace (local models)
 
 The HuggingFace provider runs models locally instead of calling a remote API — it exposes

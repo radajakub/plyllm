@@ -278,13 +278,19 @@ def test_the_upload_is_retried_but_the_create_is_not(llm: LLM, server: _FakeOpen
     assert [list(job.requests) for job in store.load()] == [["q1"]]
 
 
-def test_an_input_over_the_size_limit_is_refused_before_the_upload(llm: LLM, server: _FakeOpenAI, store: JsonBatchStore, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(openai_client, "_MAX_BATCH_BYTES", 100)
+def test_an_input_over_the_size_limit_is_split_into_files_that_fit(llm: LLM, server: _FakeOpenAI, store: JsonBatchStore, monkeypatch: pytest.MonkeyPatch):
+    one_line = len(openai_client._input_line("q1", llm._provider_map[Provider.OPENAI]._request(*_request_args("q1"))))
+    monkeypatch.setattr(OpenAILLMClient, "max_batch_bytes", 2 * one_line + 10)
 
-    with pytest.raises(ValueError, match="200 MB"):
-        asyncio.run(_run(llm, store, _requests("q1")))
+    asyncio.run(_run(llm, store, _requests("q1", "q2", "q3")))
 
-    assert ("POST", "/v1/files") not in server.calls and store.load() == []
+    assert [[line["custom_id"] for line in server.uploaded_lines(batch_id)] for batch_id in server.batches] == [["q1", "q2"], ["q3"]]
+    assert all(len(content) <= 2 * one_line + 10 for content in server.files.values())
+
+
+def _request_args(request_id: str) -> tuple[Any, ...]:
+    [request] = _requests(request_id)
+    return (next(m for m in openai_client.openai_models() if m.model_name == _MODEL.model_name), request.system, request.messages, _MODEL.options, _Move)
 
 
 def test_the_store_records_the_openai_job(llm: LLM, store: JsonBatchStore):

@@ -43,6 +43,11 @@ _BATCH_ENDED = frozenset({"completed", "expired", "cancelled", "failed"})
 _UNRUN_KINDS = {"batch_expired": FailureKind.EXPIRED, "batch_cancelled": FailureKind.CANCELLED}
 
 
+def _input_line(request_id: str, body: dict[str, Any]) -> bytes:
+    # one line of the input file; its length is what the file's size limit counts
+    return (json.dumps({"custom_id": request_id, "method": "POST", "url": _BATCH_ENDPOINT, "body": body}, ensure_ascii=False) + "\n").encode()
+
+
 def _batch_line(line: dict[str, Any]) -> Response | LLMCallError:
     # one line of a batch's output or error file: {"custom_id", "response": {"status_code", "body"}, "error"}
     error = line.get("error")
@@ -102,6 +107,7 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel, Response]):
     _retry_errors = _RETRY_ERRORS
     supports_batch = True
     max_batch_requests = _MAX_BATCH_REQUESTS
+    max_batch_bytes = _MAX_BATCH_BYTES
 
     def __init__(self, client: AsyncOpenAI, concurrency: int | None = None, prompt_cache_key: str = DEFAULT_PROMPT_CACHE_KEY) -> None:
         super().__init__(openai_models(), openai_embedding_models(), concurrency)
@@ -176,14 +182,14 @@ class OpenAILLMClient(LLMClient[OpenAILLMModel, Response]):
 
     async def _submit_batch(self, model: OpenAILLMModel, requests: list[tuple[str, dict[str, Any]]]) -> str:
         # the model is in every line's body (from _request), so the batch itself needs none
-        lines = [json.dumps({"custom_id": request_id, "method": "POST", "url": _BATCH_ENDPOINT, "body": body}, ensure_ascii=False) for request_id, body in requests]
-        content = ("\n".join(lines) + "\n").encode()
-        if len(content) > _MAX_BATCH_BYTES:
-            raise ValueError(f"The batch input is {len(content) / 1024 / 1024:.1f} MB, over OpenAI's 200 MB limit; send fewer requests per call")
+        content = b"".join(_input_line(request_id, body) for request_id, body in requests)
         # the upload is retried like any call: a second copy of a file costs nothing. Creating the batch is not, since a create that timed out may have made a batch that runs, and bills, anyway
         upload = await self._batch_api(lambda: self._client.files.create(file=("batch.jsonl", content), purpose="batch"))
         batch = await self._client.batches.create(completion_window="24h", endpoint=_BATCH_ENDPOINT, input_file_id=upload.id)
         return batch.id
+
+    def _batch_size(self, request_id: str, body: dict[str, Any]) -> int:
+        return len(_input_line(request_id, body))
 
     async def _batch_ended(self, batch_id: str) -> bool:
         batch = await self._client.batches.retrieve(batch_id)
