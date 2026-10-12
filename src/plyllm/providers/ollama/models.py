@@ -58,9 +58,12 @@ _GEMMA4: Sampling = {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 0.0,
 
 def ollama_models() -> list[OllamaLLMModel]:
     # Tags as `ollama list` shows them. A tag is mutable: a later pull may give other weights under the same name, so
-    # each entry notes the digest it was checked against. Flags are from the docs, not from a probe of the server.
+    # each entry notes the digest it was checked against. Probed 2026-10-12.
     # The schema is asked for in the prompt, as for the same family on vLLM
     return [
-        # digest c6eb396dbd59 (8.0B, Q4_K_M), checked 2026-10-12; its Modelfile sets top_k 64, as the card does
+        # digest c6eb396dbd59 (8.0B, Q4_K_M), checked 2026-10-12; its Modelfile sets top_k 64, as the card does.
+        # Probe on Ollama 0.32.15: effort "none" gives no reasoning, the reasoning comes in its own field and the
+        # schema in the prompt gives plain JSON. With thinking on it gave no reasoning for "2 + 2" but some with
+        # the schema; whether "medium" always turns thinking on is not yet checked
         OllamaLLMModel("gemma-4-e4b", "gemma4:e4b", sampling_thinking=_GEMMA4, sampling_no_thinking=_GEMMA4, thinking=True, weak_structured_output=True),
     ]

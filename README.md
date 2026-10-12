@@ -249,6 +249,8 @@ model = ModelConfig.from_string("ollama:gemma-4-e4b:thinking_enabled=True")  # t
   come from the model's Modelfile, and the context size from the server (`OLLAMA_CONTEXT_LENGTH`, by default
   set from the memory). **A longer prompt is cut silently**, so set the context size before a long prompt.
 - Concurrency defaults to 1, as Ollama serves one request per model unless `OLLAMA_NUM_PARALLEL` is raised.
+- Ollama does not report reasoning or cached tokens: `reasoning_tokens` and `cached_input_tokens` are always 0,
+  and the reasoning is likely counted in `output_tokens`. Do not measure reasoning length on Ollama.
 
 ### HuggingFace (local models)
 
