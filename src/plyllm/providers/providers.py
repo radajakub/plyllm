@@ -9,4 +9,5 @@ class Provider(str, ExtendedEnum):
     MISTRAL = "mistral"
     METACENTRUM = "metacentrum"
     VLLM = "vllm"
+    OLLAMA = "ollama"
     HUGGINGFACE = "huggingface"

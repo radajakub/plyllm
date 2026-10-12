@@ -72,6 +72,18 @@ class VllmProviderConfig:
 
 
 @dataclass(frozen=True)
+class OllamaProviderConfig:
+    # a local Ollama; its OpenAI-compatible endpoint is http://127.0.0.1:11434/v1
+    base_url: str
+    # Ollama checks no key, but the SDK needs one; a proxy in front of it may check it
+    api_key: str = "ollama"
+    # long: requests queue on the server, one at a time by default, and a laptop generates slowly
+    timeout: float = 1200.0
+    max_retries: int = 0
+    retries: int = 3
+
+
+@dataclass(frozen=True)
 class HuggingFaceProviderConfig:
     # supported model aliases (see huggingface_embedding_models()) to download/verify for this environment
     models: tuple[str, ...]
@@ -90,6 +102,7 @@ class LLMConfig:
     mistral: MistralProviderConfig | None = None
     metacentrum: MetacentrumProviderConfig | None = None
     vllm: VllmProviderConfig | None = None
+    ollama: OllamaProviderConfig | None = None
     huggingface: HuggingFaceProviderConfig | None = None
     # None lets each provider use its own default (LLMClient.default_concurrency)
     default_concurrency: int | None = None
@@ -158,6 +171,16 @@ class LLMConfig:
                 retries=int(get("VLLM_RETRIES") or 3),
             )
 
+        ollama = None
+        if (ollama_url := get("OLLAMA_BASE_URL")) is not None:
+            ollama = OllamaProviderConfig(
+                base_url=ollama_url,
+                api_key=get("OLLAMA_API_KEY") or "ollama",
+                timeout=float(get("OLLAMA_TIMEOUT") or 1200.0),
+                max_retries=int(get("OLLAMA_MAX_RETRIES") or 0),
+                retries=int(get("OLLAMA_RETRIES") or 3),
+            )
+
         huggingface = None
         if huggingface_models:
             huggingface = HuggingFaceProviderConfig(models=tuple(huggingface_models), token=get("HF_TOKEN"))
@@ -170,6 +193,7 @@ class LLMConfig:
             mistral=mistral,
             metacentrum=metacentrum,
             vllm=vllm,
+            ollama=ollama,
             huggingface=huggingface,
             default_concurrency=default_concurrency,
             # an argument wins over PROMPT_CACHE_KEY in the environment

@@ -23,6 +23,7 @@ from plyllm.providers.grok.client import GrokLLMClient
 from plyllm.providers.huggingface.client import HuggingFaceLLMClient
 from plyllm.providers.metacentrum.client import MetacentrumLLMClient
 from plyllm.providers.mistral.client import MistralLLMClient
+from plyllm.providers.ollama.client import OllamaLLMClient
 from plyllm.providers.openai.client import OpenAILLMClient
 from plyllm.providers.vllm.client import VllmLLMClient
 
@@ -48,9 +49,10 @@ def _listing(*ids: str) -> SimpleNamespace:
         lambda sdk: GrokLLMClient(cast(AsyncOpenAI, sdk)),
         lambda sdk: MetacentrumLLMClient(cast(AsyncOpenAI, sdk)),
         lambda sdk: VllmLLMClient(cast(AsyncOpenAI, sdk)),
+        lambda sdk: OllamaLLMClient(cast(AsyncOpenAI, sdk)),
         lambda sdk: ClaudeLLMClient(cast(AsyncAnthropic, sdk)),
     ],
-    ids=["openai", "grok", "metacentrum", "vllm", "claude"],
+    ids=["openai", "grok", "metacentrum", "vllm", "ollama", "claude"],
 )
 def test_openai_and_anthropic_sdks_list_model_ids(build):
     client = build(_listing("model-a", "model-b"))
