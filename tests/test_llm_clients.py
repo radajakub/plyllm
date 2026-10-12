@@ -21,6 +21,7 @@ from plyllm import (
     LLMMessage,
     MetacentrumProviderConfig,
     MistralProviderConfig,
+    OllamaProviderConfig,
     OpenAIProviderConfig,
     Provider,
     VllmProviderConfig,
@@ -30,10 +31,11 @@ from plyllm.providers.gemini.client import GeminiLLMClient
 from plyllm.providers.grok.client import GrokLLMClient
 from plyllm.providers.metacentrum.client import MetacentrumLLMClient
 from plyllm.providers.mistral.client import MistralLLMClient
+from plyllm.providers.ollama.client import OllamaLLMClient
 from plyllm.providers.openai.client import OpenAILLMClient
 from plyllm.providers.vllm.client import VllmLLMClient
 
-_GENERATING = [Provider.OPENAI, Provider.GEMINI, Provider.GROK, Provider.CLAUDE, Provider.MISTRAL, Provider.METACENTRUM, Provider.VLLM]
+_GENERATING = [Provider.OPENAI, Provider.GEMINI, Provider.GROK, Provider.CLAUDE, Provider.MISTRAL, Provider.METACENTRUM, Provider.VLLM, Provider.OLLAMA]
 
 
 class _Answer(BaseModel):
@@ -51,6 +53,7 @@ def _llm(default_concurrency: int | None = None) -> LLM:
             mistral=MistralProviderConfig(api_key="test"),
             metacentrum=MetacentrumProviderConfig(api_key="test", base_url="https://offline.invalid/v1"),
             vllm=VllmProviderConfig(api_key="test", base_url="https://offline.invalid/v1"),
+            ollama=OllamaProviderConfig(base_url="https://offline.invalid/v1"),
             default_concurrency=default_concurrency,
         )
     )
@@ -67,7 +70,7 @@ def test_a_schema_is_refused_for_a_model_that_cannot_use_one(provider: Provider)
         asyncio.run(client.generate(model.model_name, LLMMessage.system("rules"), [LLMMessage.user("move")], LLMCallOptions(), _Answer))
 
 
-@pytest.mark.parametrize("provider", [Provider.GROK, Provider.CLAUDE, Provider.MISTRAL, Provider.METACENTRUM, Provider.VLLM])
+@pytest.mark.parametrize("provider", [Provider.GROK, Provider.CLAUDE, Provider.MISTRAL, Provider.METACENTRUM, Provider.VLLM, Provider.OLLAMA])
 def test_a_provider_without_embedding_models_says_embeddings_are_not_supported(provider: Provider):
     with pytest.raises(NotImplementedError, match=f"{provider.value} embeddings are not supported"):
         asyncio.run(_llm().embed(EmbeddingModelConfig(provider, "any"), ["hello"], EmbeddingTask.SEARCH_QUERY))
@@ -78,7 +81,16 @@ def test_each_provider_uses_its_own_concurrency_when_none_is_set():
 
     limits = {provider: llm._provider_map[provider]._semaphore.concurrency for provider in _GENERATING}
 
-    assert limits == {Provider.OPENAI: 10, Provider.GEMINI: 10, Provider.GROK: 10, Provider.CLAUDE: 10, Provider.MISTRAL: 10, Provider.METACENTRUM: 4, Provider.VLLM: 32}
+    assert limits == {
+        Provider.OPENAI: 10,
+        Provider.GEMINI: 10,
+        Provider.GROK: 10,
+        Provider.CLAUDE: 10,
+        Provider.MISTRAL: 10,
+        Provider.METACENTRUM: 4,
+        Provider.VLLM: 32,
+        Provider.OLLAMA: 1,
+    }
 
 
 def test_a_set_concurrency_overrides_every_provider_default():
@@ -93,8 +105,8 @@ def test_aclose_closes_every_providers_connection_pool():
 
     asyncio.run(llm.aclose())
 
-    for client in (clients[Provider.OPENAI], clients[Provider.GROK], clients[Provider.CLAUDE], clients[Provider.METACENTRUM], clients[Provider.VLLM]):
-        assert isinstance(client, OpenAILLMClient | GrokLLMClient | ClaudeLLMClient | MetacentrumLLMClient | VllmLLMClient)
+    for client in (clients[Provider.OPENAI], clients[Provider.GROK], clients[Provider.CLAUDE], clients[Provider.METACENTRUM], clients[Provider.VLLM], clients[Provider.OLLAMA]):
+        assert isinstance(client, OpenAILLMClient | GrokLLMClient | ClaudeLLMClient | MetacentrumLLMClient | VllmLLMClient | OllamaLLMClient)
         assert client._client.is_closed(), client.provider_key
     gemini = clients[Provider.GEMINI]
     assert isinstance(gemini, GeminiLLMClient) and gemini._http_client is not None and gemini._http_client.is_closed

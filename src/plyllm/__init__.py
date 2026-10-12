@@ -25,6 +25,7 @@ from plyllm.llm_config import (
     LLMConfig,
     MetacentrumProviderConfig,
     MistralProviderConfig,
+    OllamaProviderConfig,
     OpenAIProviderConfig,
     VllmProviderConfig,
 )
@@ -68,6 +69,7 @@ __all__ = [
     "MistralProviderConfig",
     "MetacentrumProviderConfig",
     "VllmProviderConfig",
+    "OllamaProviderConfig",
     "HuggingFaceProviderConfig",
     "LLMMessage",
     "MessageRole",

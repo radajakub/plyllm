@@ -9,7 +9,7 @@ pip install "plyllm[all]"
 ```
 
 Each provider SDK is an optional extra, so install only the ones you use: `openai`, `gemini`, `grok`,
-`anthropic`, `mistral`, `metacentrum` (an OpenAI-compatible endpoint), `vllm` (a vLLM server we run), `huggingface` (local embedding
+`anthropic`, `mistral`, `metacentrum` (an OpenAI-compatible endpoint), `vllm` (a vLLM server we run), `ollama` (a local Ollama), `huggingface` (local embedding
 models; pulls in torch).
 
 ## Quickstart
@@ -67,6 +67,8 @@ METACENTRUM_API_KEY=...
 
 VLLM_BASE_URL=...
 VLLM_API_KEY=...
+
+OLLAMA_BASE_URL=...   # e.g. http://127.0.0.1:11434/v1
 
 HF_TOKEN=...   # only for gated/private HuggingFace models
 
@@ -230,6 +232,23 @@ assert model.model_name in await llm.served_models(Provider.VLLM)  # one server 
 - Thinking and `reasoning_effort` are chat template variables (`chat_template_kwargs`).
 - A schema is asked for in the prompt, not enforced by the server (`weak_structured_output`).
 - Calls cost nothing. Concurrency defaults to 32.
+
+### Ollama (a local server)
+
+The `ollama` provider calls a local Ollama through its OpenAI-compatible endpoint, with the same client code as
+`vllm`. It is for trying prompts and the plumbing on a laptop; GGUF weights on Ollama and FP8 weights on vLLM are
+different judges, so do not mix their results.
+
+```python
+model = ModelConfig.from_string("ollama:gemma-4-e4b:thinking_enabled=True")  # the tag gemma4:e4b
+```
+
+- A model has an alias without colons (`gemma-4-e4b`); the Ollama tag (`gemma4:e4b`) is what is sent.
+- Thinking is switched with `reasoning_effort` (`none` for off).
+- Ollama's `/v1` takes only `temperature`, `top_p` and the penalties. `top_k`, `min_p` and `repeat_penalty`
+  come from the model's Modelfile, and the context size from the server (`OLLAMA_CONTEXT_LENGTH`, by default
+  set from the memory). **A longer prompt is cut silently**, so set the context size before a long prompt.
+- Concurrency defaults to 1, as Ollama serves one request per model unless `OLLAMA_NUM_PARALLEL` is raised.
 
 ### HuggingFace (local models)
 

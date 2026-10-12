@@ -11,6 +11,8 @@ All notable changes to this project are documented in this file. The format is b
 - `vllm` provider for a vLLM server we run (e.g. through plyserve), configured by `VLLM_BASE_URL` and
   `VLLM_API_KEY`. It uses Chat Completions and sends each model's sampling explicitly. Models:
   `qwen-3.8-27b-fp8`, `gemma-4-31b-fp8`. The `vllm` extra installs the openai SDK.
+- `ollama` provider for a local Ollama, through its OpenAI-compatible endpoint, configured by
+  `OLLAMA_BASE_URL`. Model: `gemma-4-e4b` (tag `gemma4:e4b`). The `ollama` extra installs the openai SDK.
 - `providers/openweight`: `OpenWeightLLMModel` and `OpenWeightLLMClient` for open-weight models on servers we
   run, and `openweight.common` with what every open-weight server client shares (error rules, model listing,
   the schema-in-prompt fallback, `<think>` splitting).

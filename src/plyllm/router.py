@@ -28,6 +28,7 @@ _CLIENT_MODULES = (
     (Provider.MISTRAL, "plyllm.providers.mistral.client", "MistralLLMClient"),
     (Provider.METACENTRUM, "plyllm.providers.metacentrum.client", "MetacentrumLLMClient"),
     (Provider.VLLM, "plyllm.providers.vllm.client", "VllmLLMClient"),
+    (Provider.OLLAMA, "plyllm.providers.ollama.client", "OllamaLLMClient"),
     (Provider.HUGGINGFACE, "plyllm.providers.huggingface.client", "HuggingFaceLLMClient"),
 )
 
