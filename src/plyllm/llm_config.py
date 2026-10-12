@@ -60,6 +60,18 @@ class MetacentrumProviderConfig:
 
 
 @dataclass(frozen=True)
+class VllmProviderConfig:
+    # a vLLM server we run, e.g. through plyserve, which sets VLLM_BASE_URL and VLLM_API_KEY for its client
+    api_key: str
+    base_url: str
+    # long: requests queue on one GPU, and a thinking trace can take minutes once there
+    timeout: float = 1200.0
+    # no SDK retries inside ours, so a stopped server fails a call in minutes rather than hours
+    max_retries: int = 0
+    retries: int = 3
+
+
+@dataclass(frozen=True)
 class HuggingFaceProviderConfig:
     # supported model aliases (see huggingface_embedding_models()) to download/verify for this environment
     models: tuple[str, ...]
@@ -77,6 +89,7 @@ class LLMConfig:
     claude: ClaudeProviderConfig | None = None
     mistral: MistralProviderConfig | None = None
     metacentrum: MetacentrumProviderConfig | None = None
+    vllm: VllmProviderConfig | None = None
     huggingface: HuggingFaceProviderConfig | None = None
     # None lets each provider use its own default (LLMClient.default_concurrency)
     default_concurrency: int | None = None
@@ -133,6 +146,18 @@ class LLMConfig:
                 retries=int(get("METACENTRUM_RETRIES") or 3),
             )
 
+        vllm = None
+        vllm_key = get("VLLM_API_KEY")
+        vllm_url = get("VLLM_BASE_URL")
+        if vllm_key is not None and vllm_url is not None:
+            vllm = VllmProviderConfig(
+                api_key=vllm_key,
+                base_url=vllm_url,
+                timeout=float(get("VLLM_TIMEOUT") or 1200.0),
+                max_retries=int(get("VLLM_MAX_RETRIES") or 0),
+                retries=int(get("VLLM_RETRIES") or 3),
+            )
+
         huggingface = None
         if huggingface_models:
             huggingface = HuggingFaceProviderConfig(models=tuple(huggingface_models), token=get("HF_TOKEN"))
@@ -144,6 +169,7 @@ class LLMConfig:
             claude=claude,
             mistral=mistral,
             metacentrum=metacentrum,
+            vllm=vllm,
             huggingface=huggingface,
             default_concurrency=default_concurrency,
             # an argument wins over PROMPT_CACHE_KEY in the environment

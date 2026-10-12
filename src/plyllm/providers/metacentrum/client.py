@@ -1,30 +1,24 @@
 from __future__ import annotations
 
-import json
-import re
 import warnings
 from typing import Any
 
-from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, AsyncOpenAI
+from openai import AsyncOpenAI
 
 # private: the helper responses.parse() uses to build the strict schema; a test pins it against SDK upgrades
 from openai.lib._parsing._responses import type_to_text_format_param
 from openai.types.responses import Response
 from pydantic import BaseModel
 
-from plyllm.client import DEFAULT_RETRIES, LLMClient
-from plyllm.errors import FailureKind, retryable_status, status_kind
+from plyllm.client import DEFAULT_RETRIES
 from plyllm.llm_config import LLMConfig
 from plyllm.message import LLMMessage
 from plyllm.options import LLMCallOptions
 from plyllm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
+from plyllm.providers.openweight.common import OpenWeightClientBase, asks_in_prompt, json_body, schema_instructions, split_think
 from plyllm.providers.providers import Provider
 from plyllm.response import LLMResponse
 from plyllm.tokens import LLMTokens
-
-# APITimeoutError subclasses APIConnectionError and RateLimitError subclasses APIStatusError, so these two
-# cover every failure the SDK raises for a request that was sent
-_RETRY_ERRORS = (APIConnectionError, APIStatusError)
 
 
 def _refusal(response: Any) -> str | None:
@@ -68,53 +62,25 @@ def _extract_text_and_reasoning(response: Any) -> tuple[str, list[str]]:
             if content.type in ["output_text", "reasoning_text"] and content.text is not None:
                 target.append(content.text)
 
-    text = "".join(text_parts)
     # some hosted models emit an inline <think>...</think> block instead of reasoning items
-    if "</think>" in text:
-        reasoning, tail = text.rsplit("</think>", 1)
-        reasoning = reasoning.replace("<think>", "").replace("</think>", "").strip()
-        text = tail.strip()
-        if reasoning:
-            reasoning_summaries.append(reasoning)
+    text, inline = split_think("".join(text_parts))
+    if inline:
+        reasoning_summaries.append(inline)
 
     return text, reasoning_summaries
-
-
-_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
-
-
-def _schema_instructions(system: str, output_schema: type[BaseModel]) -> str:
-    # "matching this schema" alone made gemma-4 copy the schema back ({"properties": {...}}) in 5 of 6 game
-    # prompts on 2026-10-09; saying it is an instance to fill in fixed all 10 test prompts
-    schema = json.dumps(output_schema.model_json_schema(), indent=1)
-    return (
-        f"{system}\n\nReply with a single JSON object that is an instance of the JSON Schema below: fill in the values, "
-        f"do not repeat the schema itself. No prose, no code fence.\n{schema}"
-    )
-
-
-def _asks_in_prompt(model: MetacentrumLLMModel, output_schema: type[BaseModel] | None) -> bool:
-    # a schema this model cannot have enforced without looping is asked for in the prompt instead
-    return output_schema is not None and model.weak_structured_output
-
-
-def _json_body(text: str) -> str:
-    return _FENCE.sub("", text).strip()
 
 
 def silence_proxy_serializer_warnings() -> None:
     warnings.filterwarnings("ignore", message="Pydantic serializer warnings", category=UserWarning)
 
 
-class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel, Response]):
+class MetacentrumLLMClient(OpenWeightClientBase[MetacentrumLLMModel, Response]):
     provider_key = Provider.METACENTRUM
-    _retry_errors = _RETRY_ERRORS
     # the shared e-INFRA endpoint answered 429 to 10 parallel calls on 2026-10-09
     default_concurrency = 4
 
     def __init__(self, client: AsyncOpenAI, concurrency: int | None = None, retries: int = DEFAULT_RETRIES) -> None:
-        super().__init__(metacentrum_models(), [], concurrency, retries)
-        self._client = client
+        super().__init__(metacentrum_models(), client, concurrency, retries)
 
     @classmethod
     def build(cls, config: LLMConfig) -> MetacentrumLLMClient | None:
@@ -129,34 +95,13 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel, Response]):
         )
         return cls(client, config.default_concurrency, config.metacentrum.retries)
 
-    def _should_retry_on_error(self, error: Exception) -> bool:
-        if isinstance(error, APIConnectionError):
-            return True  # never reached the API, or timed out on the way
-        return isinstance(error, APIStatusError) and retryable_status(error.status_code)
-
-    def error_kind(self, error: Exception) -> FailureKind:
-        if isinstance(error, APITimeoutError):
-            return FailureKind.TIMEOUT  # before APIConnectionError, which it subclasses
-        if isinstance(error, APIConnectionError):
-            return FailureKind.CONNECTION
-        if isinstance(error, APIStatusError):
-            return status_kind(error.status_code)
-        # e.g. APIResponseValidationError: the API answered, with something the SDK could not read
-        return FailureKind.PROVIDER if isinstance(error, APIError) else FailureKind.OTHER
-
-    async def aclose(self) -> None:
-        await self._client.close()
-
-    async def served_models(self) -> set[str]:
-        return {model.id async for model in self._client.models.list()}
-
     def _request(
         self, model: MetacentrumLLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None
     ) -> dict[str, Any]:
         params = model.extract_params(options)
         extra_body = model.extract_extra_body(options)
-        ask_in_prompt = _asks_in_prompt(model, output_schema)
-        instructions = _schema_instructions(system.content, output_schema) if ask_in_prompt and output_schema else system.content
+        ask_in_prompt = asks_in_prompt(model, output_schema)
+        instructions = schema_instructions(system.content, output_schema) if ask_in_prompt and output_schema else system.content
         kwargs: dict[str, Any] = dict(
             model=model.model_string,
             instructions=instructions,
@@ -180,8 +125,8 @@ class MetacentrumLLMClient(LLMClient[MetacentrumLLMModel, Response]):
     def _parse(self, model: MetacentrumLLMModel, response: Response, output_schema: type[BaseModel] | None) -> LLMResponse:
         # every path strips the inline <think> block a hosted model may emit before the answer is read as JSON
         output_text, reasoning = _extract_text_and_reasoning(response)
-        if _asks_in_prompt(model, output_schema):
-            output_text = _json_body(output_text)
+        if asks_in_prompt(model, output_schema):
+            output_text = json_body(output_text)
         tokens = responses_tokens(response.usage)
 
         refusal = _refusal(response)

@@ -27,6 +27,7 @@ _CLIENT_MODULES = (
     (Provider.CLAUDE, "plyllm.providers.claude.client", "ClaudeLLMClient"),
     (Provider.MISTRAL, "plyllm.providers.mistral.client", "MistralLLMClient"),
     (Provider.METACENTRUM, "plyllm.providers.metacentrum.client", "MetacentrumLLMClient"),
+    (Provider.VLLM, "plyllm.providers.vllm.client", "VllmLLMClient"),
     (Provider.HUGGINGFACE, "plyllm.providers.huggingface.client", "HuggingFaceLLMClient"),
 )
 

@@ -26,6 +26,7 @@ from plyllm.llm_config import (
     MetacentrumProviderConfig,
     MistralProviderConfig,
     OpenAIProviderConfig,
+    VllmProviderConfig,
 )
 from plyllm.message import LLMMessage, MessageRole
 from plyllm.model import DecisionModel, EmbeddingModel, EmbeddingTask, LLMModel
@@ -66,6 +67,7 @@ __all__ = [
     "ClaudeProviderConfig",
     "MistralProviderConfig",
     "MetacentrumProviderConfig",
+    "VllmProviderConfig",
     "HuggingFaceProviderConfig",
     "LLMMessage",
     "MessageRole",

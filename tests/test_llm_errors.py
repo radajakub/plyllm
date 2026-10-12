@@ -29,13 +29,14 @@ from plyllm.providers.gemini.client import GeminiLLMClient
 from plyllm.providers.grok.client import GrokLLMClient
 from plyllm.providers.metacentrum.client import MetacentrumLLMClient
 from plyllm.providers.openai.client import OpenAILLMClient
+from plyllm.providers.vllm.client import VllmLLMClient
 
 REQUEST = httpx2.Request("POST", "https://example.invalid/v1/responses")
 
 
 # each provider on the openai SDK keeps its own copy of the retry rule and error_kind, so they can be fixed
 # one at a time; every case below runs against all three so the copies cannot drift apart by accident
-_OPENAI_SDK_CLIENTS = [OpenAILLMClient, GrokLLMClient, MetacentrumLLMClient]
+_OPENAI_SDK_CLIENTS = [OpenAILLMClient, GrokLLMClient, MetacentrumLLMClient, VllmLLMClient]
 
 
 @pytest.mark.parametrize(

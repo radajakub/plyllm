@@ -131,7 +131,8 @@ def test_no_paid_case_can_cost_more_than_a_few_cents(case: str):
 
 
 @pytest.mark.online
-@pytest.mark.parametrize("provider", [provider for provider in Provider if provider is not Provider.HUGGINGFACE])
+# a vLLM server serves the one model it was started with, so the others in its registry are never all there
+@pytest.mark.parametrize("provider", [provider for provider in Provider if provider not in (Provider.HUGGINGFACE, Provider.VLLM)])
 def test_every_active_model_is_still_served(llm: LLM, provider: Provider):
     """A model the provider stopped serving fails a run with a 400 that reads like an outage. It is marked
     `retired=True` in its models.py instead of deleted, so recorded results still load and cost."""

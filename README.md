@@ -9,7 +9,7 @@ pip install "plyllm[all]"
 ```
 
 Each provider SDK is an optional extra, so install only the ones you use: `openai`, `gemini`, `grok`,
-`anthropic`, `mistral`, `metacentrum` (an OpenAI-compatible endpoint), `huggingface` (local embedding
+`anthropic`, `mistral`, `metacentrum` (an OpenAI-compatible endpoint), `vllm` (a vLLM server we run), `huggingface` (local embedding
 models; pulls in torch).
 
 ## Quickstart
@@ -64,6 +64,9 @@ MISTRAL_API_KEY=...
 
 METACENTRUM_BASE_URL=...
 METACENTRUM_API_KEY=...
+
+VLLM_BASE_URL=...
+VLLM_API_KEY=...
 
 HF_TOKEN=...   # only for gated/private HuggingFace models
 
@@ -209,6 +212,24 @@ print(response.answer("department"), llm.calculate_decision_cost(model, response
 - `response.tokens` records every token count the API reports, including output and reasoning tokens.
   Only `input_tokens` is billed.
 - Decisions are not available through the Batch API.
+
+### vLLM (our own server)
+
+The `vllm` provider calls a vLLM server we run, for example one started by
+[plyserve](https://github.com/radajakub/plyserve), through Chat Completions. plyserve sets `VLLM_BASE_URL` and
+`VLLM_API_KEY` for the command it runs, so `LLMConfig.from_env()` picks the server up:
+
+```python
+model = ModelConfig.from_string("vllm:qwen-3.8-27b-fp8:thinking_enabled=False")
+assert model.model_name in await llm.served_models(Provider.VLLM)  # one server serves one model
+```
+
+- A model's name is the served name in plyserve's `models.toml`. Add a model to both, with the same name.
+- Every request sends the model's full sampling set (from its model card), so the server's defaults from
+  `generation_config.json` never apply. `temperature` overrides only the temperature.
+- Thinking and `reasoning_effort` are chat template variables (`chat_template_kwargs`).
+- A schema is asked for in the prompt, not enforced by the server (`weak_structured_output`).
+- Calls cost nothing. Concurrency defaults to 32.
 
 ### HuggingFace (local models)
 
