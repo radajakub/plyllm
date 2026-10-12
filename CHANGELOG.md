@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-12
+
 ### Added
 
 - `vllm` provider for a vLLM server we run (e.g. through plyserve), configured by `VLLM_BASE_URL` and
