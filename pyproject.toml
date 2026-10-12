@@ -44,6 +44,8 @@ anthropic = ["anthropic>=1.13.0,<2"]
 mistral = ["mistralai>=3.2.0,<4"]
 # metacentrum is an OpenAI-compatible endpoint and reuses the openai SDK
 metacentrum = ["openai>=3.28.0,<4"]
+# vllm is a server we run (see plyserve), called through the openai SDK
+vllm = ["openai>=3.28.0,<4"]
 huggingface = ["torch>=2.4.0", "transformers>=4.44.0"]
 all = ["openai>=3.28.0,<4", "google-genai>=2.14.0,<3", "anthropic>=1.13.0,<2", "mistralai>=3.2.0,<4", "torch>=2.4.0", "transformers>=4.44.0"]
 

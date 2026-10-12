@@ -15,8 +15,9 @@ import pytest
 from pydantic import BaseModel, Field
 
 from plyllm import LLMCallOptions, LLMConfig
-from plyllm.providers.metacentrum.client import _json_body, _schema_instructions, silence_proxy_serializer_warnings
+from plyllm.providers.metacentrum.client import silence_proxy_serializer_warnings
 from plyllm.providers.metacentrum.models import metacentrum_models
+from plyllm.providers.openweight.common import json_body, schema_instructions
 
 
 class Label(BaseModel):
@@ -59,7 +60,7 @@ def test_the_models_that_cannot_have_a_schema_enforced_are_marked():
 def test_the_schema_is_asked_for_in_the_prompt_with_its_field_descriptions():
     """vLLM's own guide: under guided decoding "the model does not see the schema or its field
     descriptions". Asking in the prompt is what puts them back, so the descriptions must survive."""
-    instructions = _schema_instructions("You label reasoning mistakes.", Answer)
+    instructions = schema_instructions("You label reasoning mistakes.", Answer)
 
     assert instructions.startswith("You label reasoning mistakes.")
     assert "id of the code, or empty when none covers it" in instructions
@@ -68,14 +69,14 @@ def test_the_schema_is_asked_for_in_the_prompt_with_its_field_descriptions():
 
 def test_the_prompt_asks_for_an_instance_not_the_schema():
     # gemma-4 answered {"properties": {"action": ...}} when only told to "match" the schema
-    assert "do not repeat the schema itself" in _schema_instructions("Play.", Answer)
+    assert "do not repeat the schema itself" in schema_instructions("Play.", Answer)
 
 
 def test_a_fenced_answer_is_unwrapped_before_anything_reads_it_as_json():
-    assert _json_body('```json\n{"labels": [], "notes": ""}\n```') == '{"labels": [], "notes": ""}'
-    assert _json_body('```\n{"labels": []}\n```') == '{"labels": []}'
-    assert _json_body('  {"labels": []}  ') == '{"labels": []}'
-    assert Answer.model_validate_json(_json_body('```json\n{"labels": [], "notes": "x"}\n```')).notes == "x"
+    assert json_body('```json\n{"labels": [], "notes": ""}\n```') == '{"labels": [], "notes": ""}'
+    assert json_body('```\n{"labels": []}\n```') == '{"labels": []}'
+    assert json_body('  {"labels": []}  ') == '{"labels": []}'
+    assert Answer.model_validate_json(json_body('```json\n{"labels": [], "notes": "x"}\n```')).notes == "x"
 
 
 def test_the_registry_only_names_models_the_endpoint_serves():
