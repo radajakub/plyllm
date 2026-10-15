@@ -60,7 +60,7 @@ class GrokLLMModel(LLMModel):
 def grok_models() -> list[GrokLLMModel]:
     # prices are the standard (< 200k context) tier, USD per 1M tokens. The batch discount is per model (20% on
     # grok-4.3 and grok-4.20, on every token type); "models not listed above have no batch discount", and the
-    # docs do not say whether grok-4.5 accepts batch requests at all, so it has no batch price
+    # grok-4.5 page says "Batch API: Not supported", so it has no batch price
     return [
         # grok-4.5 (reasoning cannot be disabled; effort low/medium/high)
         GrokLLMModel("grok-4.5", "grok-4.5", input_cost=2.0, output_cost=6.0, cached_input_cost=0.3, thinking=True, thinking_only=True, supported_reasoning=_GROK_REASONING),

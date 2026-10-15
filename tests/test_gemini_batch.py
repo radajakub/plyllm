@@ -23,7 +23,7 @@ class _Move(BaseModel):
     move: int
 
 
-_MODEL = ModelConfig(Provider.GEMINI, "gemini-3.5-flash", LLMCallOptions(thinking_enabled=True))
+_MODEL = ModelConfig(Provider.GEMINI, "gemini-3.6-flash", LLMCallOptions(thinking_enabled=True))
 
 
 def _response(text: str, finish_reason: str = "STOP") -> dict[str, Any]:
@@ -121,7 +121,7 @@ def test_an_inline_request_carries_exactly_the_request_generate_sends(llm: LLM, 
     asyncio.run(_run(llm, store, [request]))
 
     assert server.sent_requests(0) == [{"request": server.generate_requests[0], "metadata": {"plyllm_id": "q1"}}]
-    assert ("POST", "/v1beta/models/gemini-3.5-flash:batchGenerateContent") in server.calls
+    assert ("POST", "/v1beta/models/gemini-3.6-flash:batchGenerateContent") in server.calls
     assert store.load()[0].batch_id == "batches/b0"
 
 
