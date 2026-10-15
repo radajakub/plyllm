@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-10-15
+
 ### Changed
 
 - vLLM: `qwen-3.8-27b-fp8` has the output schema enforced by the server (`response_format`) instead of asked
