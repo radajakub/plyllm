@@ -15,6 +15,7 @@ class FailureKind(ExtendedEnum):
     PROVIDER = "provider_error"  # the API answered with an error
     UNPARSEABLE = "unparseable"  # an answer arrived and did not match the schema
     REFUSAL = "refusal"  # the model declined to answer, or the provider blocked the answer
+    PROMPT_BLOCKED = "prompt_blocked"  # the provider blocked the prompt before the model answered
     NO_OUTPUT = "no_structured_output"  # the call succeeded and carried no parsed object
     STALE_CACHE = "stale_cache"  # a cached answer no longer matches the schema it was stored under
     EXPIRED = "batch_expired"  # a batch request the provider did not reach before the batch expired
@@ -26,7 +27,7 @@ class LLMCallError(Exception):
     def __init__(self, kind: FailureKind, message: str, response: LLMResponse | None = None) -> None:
         super().__init__(message)
         self.kind = kind
-        # the answer that did arrive when the call itself succeeded (UNPARSEABLE, REFUSAL), so its text and
+        # the answer that did arrive when the call itself succeeded (UNPARSEABLE, REFUSAL, PROMPT_BLOCKED), so its text and
         # its cost are not lost with the exception; None for transport failures
         self.response = response
 

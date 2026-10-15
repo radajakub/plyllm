@@ -84,11 +84,17 @@ def _unrun(job: BatchJob, stored: StoredBatchJob) -> dict[str, LLMCallError]:
     return {request_id: LLMCallError(kind, f"Batch {stored.batch_id} ended as {state} before this request ran{reason}") for request_id in stored.requests}
 
 
-def _blocked(response: GenerateContentResponse) -> str | None:
-    # Gemini has no refusal message: a declined request is a blocked prompt or an answer stopped by a filter
+def _prompt_blocked(response: GenerateContentResponse) -> str | None:
+    # a filter stopped the prompt before the model saw it. The same request has been seen blocked once and
+    # answered another time, so it is kept apart from a refusal for callers that want to send it again
     feedback = response.prompt_feedback
     if feedback is not None and feedback.block_reason is not None:
         return f"prompt blocked ({feedback.block_reason.value})"
+    return None
+
+
+def _blocked(response: GenerateContentResponse) -> str | None:
+    # Gemini has no refusal message: a declined request is an answer stopped by a filter
     finish = response.candidates[0].finish_reason if response.candidates else None
     if finish is not None and finish in _BLOCKED_FINISH:
         return f"answer blocked ({finish.value})"
@@ -207,6 +213,11 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel, GenerateContentResponse]):
 
         reasoning = _extract_reasoning(response)
         output_text = response.text or ""
+
+        prompt_blocked = _prompt_blocked(response)
+        if prompt_blocked is not None:
+            answer = LLMResponse.from_parts(self.provider_key, model.model_string, output_text, reasoning, tokens, None)
+            raise LLMCallError(FailureKind.PROMPT_BLOCKED, f"Provider blocked the prompt to model {model.model_string}: {prompt_blocked}", answer)
 
         blocked = _blocked(response)
         if blocked is not None:

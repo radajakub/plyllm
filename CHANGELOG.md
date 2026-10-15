@@ -6,6 +6,17 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+
+- `FailureKind.PROMPT_BLOCKED`: the provider blocked the prompt before the model answered. Gemini raises it
+  when `prompt_feedback.block_reason` is set. The same request has been seen blocked once and answered
+  another time, so callers can now tell it apart from a refusal and send it again.
+
+### Changed
+
+- Gemini: a blocked prompt is `PROMPT_BLOCKED` instead of `REFUSAL`. An answer stopped by a filter is still
+  `REFUSAL`.
+
 ## [1.2.1] - 2026-10-15
 
 ## [1.2.0] - 2026-10-12
