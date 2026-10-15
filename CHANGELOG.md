@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-15
+
 ### Added
 
 - `FailureKind.PROMPT_BLOCKED`: the provider blocked the prompt before the model answered. Gemini raises it
