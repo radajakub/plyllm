@@ -18,7 +18,7 @@ import httpx2
 import pytest
 from anthropic import AsyncAnthropic, transform_schema
 from google.genai.client import AsyncClient
-from google.genai.types import BlockedReason, Candidate, FinishReason, GenerateContentResponse, GenerateContentResponsePromptFeedback
+from google.genai.types import BlockedReason, Candidate, FinishReason, GenerateContentResponse, GenerateContentResponsePromptFeedback, GenerateContentResponseUsageMetadata
 from openai import AsyncOpenAI
 from openai.lib._parsing._responses import type_to_text_format_param
 from pydantic import BaseModel
@@ -212,20 +212,29 @@ def _gemini(response: GenerateContentResponse) -> GeminiLLMClient:
     return GeminiLLMClient(cast(AsyncClient, SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))), concurrency=1)
 
 
-@pytest.mark.parametrize(
-    "response",
-    [
-        GenerateContentResponse(prompt_feedback=GenerateContentResponsePromptFeedback(block_reason=BlockedReason.SAFETY)),
-        GenerateContentResponse(candidates=[Candidate(finish_reason=FinishReason.SAFETY)]),
-    ],
-)
-def test_gemini_blocked_answer_is_a_refusal(response: GenerateContentResponse):
-    # Gemini has no refusal message: a declined request is a blocked prompt or an answer stopped by a filter
+def test_gemini_blocked_answer_is_a_refusal():
+    # Gemini has no refusal message: a declined request is an answer stopped by a filter
+    response = GenerateContentResponse(candidates=[Candidate(finish_reason=FinishReason.SAFETY)])
     with pytest.raises(LLMCallError) as caught:
         _generate(_gemini(response), "gemini-3.6-flash", LLMCallOptions(thinking_enabled=True))
 
     assert caught.value.kind is FailureKind.REFUSAL
     assert caught.value.response is not None
+
+
+@pytest.mark.parametrize("reason", [BlockedReason.SAFETY, BlockedReason.OTHER])
+def test_gemini_blocked_prompt_is_kept_apart_from_a_refusal(reason: BlockedReason):
+    """The same request was seen blocked once and answered another time, so a caller must be able to tell a
+    blocked prompt from the model declining, to send it again."""
+    response = GenerateContentResponse(
+        prompt_feedback=GenerateContentResponsePromptFeedback(block_reason=reason), usage_metadata=GenerateContentResponseUsageMetadata(prompt_token_count=368)
+    )
+    with pytest.raises(LLMCallError) as caught:
+        _generate(_gemini(response), "gemini-3.6-flash", LLMCallOptions(thinking_enabled=True))
+
+    assert caught.value.kind is FailureKind.PROMPT_BLOCKED
+    assert f"prompt blocked ({reason.value})" in str(caught.value)
+    assert caught.value.response is not None and caught.value.response.tokens.input_tokens == 368
 
 
 def test_a_built_claude_client_sends_long_requests_without_streaming(monkeypatch):
