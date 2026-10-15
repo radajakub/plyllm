@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Changed
+
+- vLLM: `qwen-3.8-27b-fp8` has the output schema enforced by the server (`response_format`) instead of asked
+  for in the prompt. In the prompt it lost 1-4% of answers as unparseable on real traces. On trial: a judge run
+  under the same cache key as before reuses the in-prompt answers, so give it a new revision. `gemma-4-31b-fp8`
+  still asks in the prompt.
+
 ## [1.2.2] - 2026-10-15
 
 ### Added

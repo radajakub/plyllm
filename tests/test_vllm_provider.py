@@ -188,7 +188,7 @@ def test_tokens_are_read_from_the_usage_and_its_details():
 def test_the_schema_is_asked_for_in_the_prompt_and_a_fenced_answer_is_unwrapped():
     client, completions = _client(_completion('```json\n{"answer": 4}\n```'))
 
-    response = _generate(client, "qwen-3.8-27b-fp8", LLMCallOptions(), _Answer)
+    response = _generate(client, "gemma-4-31b-fp8", LLMCallOptions(), _Answer)
 
     assert "response_format" not in completions.kwargs
     system = completions.kwargs["messages"][0]["content"]
@@ -199,9 +199,8 @@ def test_the_schema_is_asked_for_in_the_prompt_and_a_fenced_answer_is_unwrapped(
 def test_a_model_marked_for_enforcement_sends_the_strict_schema():
     # also pins the private `type_to_response_format_param` import against SDK upgrades
     client, completions = _client(_completion('{"answer": 4}'))
-    client.resolve_model("gemma-4-31b-fp8").weak_structured_output = False
 
-    response = _generate(client, "gemma-4-31b-fp8", LLMCallOptions(), _Answer)
+    response = _generate(client, "qwen-3.8-27b-fp8", LLMCallOptions(), _Answer)
 
     assert completions.kwargs["response_format"] == type_to_response_format_param(_Answer)
     assert completions.kwargs["response_format"]["json_schema"]["strict"] is True

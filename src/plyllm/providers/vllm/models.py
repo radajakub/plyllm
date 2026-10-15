@@ -21,8 +21,9 @@ _NO_THINKING = {"enable_thinking": False}
 def vllm_models() -> list[OpenWeightLLMModel]:
     # Served names exactly as in plyserve's models.toml: the server is started under that name, so a model added
     # there is added here with the same string. Flags are from the chat templates, not from a probe of our server.
-    # The schema is asked for in the prompt: enforced, it made both models loop on Metacentrum's vLLM
-    # (vllm-project/vllm#40080). Whether it does so on our vLLM is not checked
+    # Gemma asks for the schema in the prompt: enforced, it made both models loop on Metacentrum's vLLM
+    # (vllm-project/vllm#40080). Qwen has it enforced, on trial on our vLLM: in the prompt it lost 1-4% of answers as
+    # unparseable on real traces (2026-10-13)
     return [
         OpenWeightLLMModel(
             "qwen-3.8-27b-fp8",
@@ -31,7 +32,7 @@ def vllm_models() -> list[OpenWeightLLMModel]:
             template_thinking=_THINKING,
             template_no_thinking=_NO_THINKING,
             thinking=True,
-            weak_structured_output=True,
+            weak_structured_output=False,
             supported_reasoning=_QWEN3_8_REASONING,
         ),
         OpenWeightLLMModel(
