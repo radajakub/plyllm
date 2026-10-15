@@ -1,6 +1,6 @@
 # Provider documentation sources
 
-Where the model data in `src/plyllm/providers/*/models.py` comes from. Verified 2026-10-09.
+Where the model data in `src/plyllm/providers/*/models.py` comes from. Verified 2026-10-09; re-checked 2026-10-15.
 
 Fetch the pricing page and the per-model pages in parallel; the pricing pages carry every model's
 rates in one table, and the per-model pages are the only place that lists a model's exact set of
@@ -14,19 +14,19 @@ output: OpenAI 0.5 (every Batch row is half the Standard row; gpt-5.4 cached sho
 Gemini 0.5 (see its section for cache reads), Grok per model (0.8 on grok-4.3 and grok-4.20; no discount
 listed for the others, which get `None`), Metacentrum `None` (free). Batch: OpenAI
 <https://developers.openai.com/api/docs/guides/batch>, Anthropic pricing page, Gemini
-<https://ai.google.dev/gemini-api/docs/batch-mode>, xAI <https://docs.x.ai/developers/pricing>, Mistral
+<https://ai.google.dev/gemini-api/docs/batch-api> (`batch-mode` 301-redirects there), xAI <https://docs.x.ai/developers/pricing>, Mistral
 <https://mistral.ai/pricing>.
 
 ## Anthropic (`claude`)
 
 - Pricing (input / output / cache read + write, batch, all models): <https://platform.claude.com/docs/en/about-claude/pricing>
-- Model lineup, IDs, context, max output, thinking mode, default effort: <https://platform.claude.com/docs/en/about-claude/models/overview>
+- Model lineup, IDs, context, max output, thinking mode, default effort: <https://platform.claude.com/docs/en/models/overview> (the old `about-claude/models/overview` 307-redirects there)
 - Effort levels per model, and per-model recommendations: <https://platform.claude.com/docs/en/build-with-claude/effort>
 - One model's full spec: `https://platform.claude.com/docs/en/models/<slug>/overview` (e.g. `opus-5-5`, `fable-5-1`)
 - Deprecations / retirements: <https://platform.claude.com/docs/en/about-claude/model-deprecations>
 
 `docs.claude.com/en/docs/...` 302-redirects to `platform.claude.com/docs/en/...`; fetch the
-`platform.claude.com` URL directly to save a round trip.
+`platform.claude.com` URL directly to save a round trip. Appending `.md` to any page URL returns clean markdown.
 
 Repository notes: `cache_write_cost` is the 5-minute cache-write rate, 1.25x input on every model
 (`_CACHE_WRITE_RATIO`); the client caches the system prompt with the default 5-minute lifetime, so the
@@ -44,7 +44,14 @@ harness does not model, so it is `thinking_only`. The per-model thinking table (
 is at <https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting>. Its footnote
 names only Opus 5 and Haiku 5.5 as rejecting `"disabled"` at `xhigh`/`max`; the repository applies
 that rule to every Claude model (`_THINKING_ONLY_EFFORTS`), which the docs neither confirm nor rule
-out for Opus 4.8, Sonnet 5 and Sonnet 4.6.
+out for Opus 4.8, Sonnet 5 and Sonnet 4.6. On 2026-10-15 the troubleshooting table listed only `"enabled"` as
+rejected for Opus 4.8 / Sonnet 5 and nothing for Sonnet 4.6 ("any value not listed as rejected is accepted"), while
+the overview says an effort level can still make the API reject `"disabled"`; the rule is kept until a live call
+settles it.
+
+Deliberately not in the registry (2026-10-15): Opus 4.7 / 4.6 / 4.5 and Sonnet 4.5 (older legacy models; Sonnet 4.5
+retires 2026-11-30), and Mythos 5 / 5.1 (same prices as Fable, but "verification required"). Haiku 4.5's earliest
+retirement is "not sooner than October 15, 2026"; watch the deprecations page for a notice.
 
 ## OpenAI (`openai`)
 
@@ -66,7 +73,11 @@ within a generation — GPT-6.x and GPT-5.6 accept `max`, GPT-5.5 and GPT-5.4 st
 Pro variants start at `medium`. Cached input is not always 0.1x: gpt-6.1-sol is 0.05x. gpt-6.1-sol rejects `none` (thinking cannot be
 turned off), and the gpt-6-astra page does not list `none`. gpt-5.6-sol is on promotional pricing "at
 least through November 21, 2026". The gpt-5-mini / gpt-5-nano pages no longer list effort values.
-Shutdown dates: <https://developers.openai.com/api/docs/deprecations>.
+Shutdown dates: <https://developers.openai.com/api/docs/deprecations>. The pricing tables are rendered by JavaScript;
+`curl` the page and read the island props if WebFetch shows no numbers. Since 2026-10 the pricing page has a "Cache
+writes" column (1.25x input) for the GPT-6 / GPT-5.6 rows ("writes are not an additive fee", only with explicit
+cache breakpoints); the OpenAI provider reads no cache-write tokens, so `cache_write_cost` is not set. Restricted
+models (gpt-5.6-cyber, gpt-rosalind-_, gpt-daybreak-_) are left out.
 
 ## Google Gemini (`gemini`)
 
@@ -92,12 +103,20 @@ cross-check both before keeping a `-preview` id (on 2026-10-09 it still listed
 (<https://ai.google.dev/gemini-api/docs/thinking>) is the per-model table of thinking levels and
 defaults; it no longer documents `thinking_budget`, which the 2.5 models still use here. 3.8 and 3.7
 Flash reject `minimal`. 3.1 Flash-Lite is not in that table.
+gemini-4-argon (added 2026-10-15) is on dated pricing: 2.00 / 10.00, cache 0.10 through 2026-11-30, then 4.00 / 20.00
+/ 0.20; implicit caching only; levels low/medium/high, default medium. 3.7 Flash and 3.5 Flash are deprecated and
+their endpoints route to 3.8 Flash and 3.6 Flash. A routed id does not run the model it names, so both are
+`retired=True` (kept for recorded results, with the last listed price). The model listing still returns them, so
+`make test-models` warns that they are "served again"; that warning is expected for these two.
 
 ## xAI Grok (`grok`)
 
-- Model list and pricing table: <https://docs.x.ai/docs/models>
-- Per-model page, with the effort list and default: `https://docs.x.ai/docs/models/<model-id>`
-- Reasoning guide: <https://docs.x.ai/docs/guides/reasoning>
+- Model list and pricing table: <https://docs.x.ai/developers/models.md> (the HTML page shows only one card)
+- Per-model page, with the effort list, default and batch support: `https://docs.x.ai/developers/models/<model-id>.md`
+- Reasoning guide: <https://docs.x.ai/developers/model-capabilities/text/reasoning>
+- Release notes: <https://docs.x.ai/developers/release-notes.md>
+
+The old `docs.x.ai/docs/...` URLs redirect to these.
 
 Repository notes: prices are the standard sub-200k-token tier; requests reaching 200k are billed at
 roughly double for the whole request. The reasoning guide and the per-model pages disagree about
@@ -117,17 +136,21 @@ update, check whether they are served now (free, needs `GROK_API_KEY`):
 uv run python -c "import asyncio; from plyllm import LLM, LLMConfig, Provider; print(sorted(asyncio.run(LLM(LLMConfig.from_env()).served_models(Provider.GROK))))"
 ```
 
-If the list contains them, add them back with the values from their model pages (on 2026-10-09:
+If the list contains them, add them back with the values from their model pages (on 2026-10-15:
 $2.00 / $6.00, cached $0.50; effort low/medium/high/xhigh, default high; reasoning cannot be
-disabled), run `make test-models`, and delete this paragraph.
+disabled; "Batch API: Not supported", so `batch_ratio=None`). Still not served on 2026-10-15.
+
+grok-build-0.1 (served since 2026-10) is left out: an early-access coding model whose page lists no effort
+levels and does not say whether reasoning can be turned off. grok-4.20 non-reasoning and multi-agent are left out
+by design, run `make test-models`, and delete this paragraph.
 
 ## Mistral (`mistral`)
 
 - API pricing per model: <https://docs.mistral.ai/inference/pricing> (`mistral.ai/pricing/api` 301-redirects here)
 - One model's page, with its API id: `https://docs.mistral.ai/models/<slug>` (e.g. `mistral-large-4-0`,
   `mistral-medium-3-5-26-04`, `mistral-small-4-0-26-03`; the undated slugs of the last two 404)
-- Model list, dated ids, deprecations: <https://docs.mistral.ai/getting-started/models/models_overview/>
-- Reasoning capability: <https://docs.mistral.ai/capabilities/reasoning/>
+- Model list, dated ids, deprecations: <https://docs.mistral.ai/models> (the old `getting-started/models/models_overview/` redirects here)
+- Reasoning capability: <https://docs.mistral.ai/studio/conversations/reasoning> (the old `capabilities/reasoning/` redirects here)
 
 Repository notes: docs slugs are not API ids — the model page shows the id next to the parameter
 count (`mistral-large-2512 +1` for Large 3, `mistral-large-4 +1` for Large 4). The reasoning page
@@ -136,14 +159,13 @@ documents `high` and `none`, so `_MISTRAL_REASONING` is `{high}` (`none` is what
 when thinking is off). Do not take the set from the SDK enum (`none, minimal, low, medium, high,
 xhigh`): on 2026-10-09 `mistral-small-2603` rejected `low` with "Must be one of (none, high)".
 Widen the set for a model only after `make test-live` (or a single paid call, approved first) shows
-the API accepts the level. Cached input is documented only as "up to -90% on input tokens", so `cached_input_cost` is
-0.1x input. Large 4 is on an undated sale; the repository records the sale price
+the API accepts the level. The docs pricing table has a "Cached input" column (0.1x input on every model, 2026-10-15). Large 4 is on an undated sale; the repository records the sale price
 with the list price in a comment. Large 3 and Ministral 3 are deliberately not in the repository
 because their reasoning support is undocumented. Hosted GLM 5.3 (`zai-glm-5-3`) documents only
 `low`/`high`/`max` and rejects `none`, which the provider sends when thinking is off; it is left out
 until the provider can express that. The Medium 3.5 page lists `mistral-medium-3-5`,
 `mistral-medium-3` and `mistral-medium-latest`, not the `mistral-medium-2604` the repository sends;
-`make test-models` shows whether the endpoint still serves it. WebFetch has swapped price labels on
+`make test-models` shows whether the endpoint still serves it. Large 4 is a public preview (v26.10, 2026-10-06), and `mistral-large-latest` points at Large 3. WebFetch has swapped price labels on
 the Large 4 page; read the pricing table from raw HTML (`curl`) when in doubt.
 
 ## Metacentrum / e-INFRA (`metacentrum`)
@@ -174,13 +196,20 @@ an effort (`needs_effort_to_think`), mistral-medium-3.5 gave no reasoning with t
 2026-10-10 that happened even for a minimal `/v1/responses` request, while `/v1/chat/completions` answered
 normally: the proxy's Responses-to-chat conversion breaks for this model, not the harness's request. The stable aliases (`qwen3.5`, `kimi`,
 `glm`, ...) resolve to whatever is current, so they keep configs working but not outputs: `qwen3.5`
-points at `qwen3.5-int4` (397B, AWQ int4).
+points at `qwen3.5-int4` (397B, AWQ int4). On 2026-10-15 `/v1/models` also served `command-a` and
+`deepseek-v4.1-flash-thinking`, which the docs page does not list (it still names `deepseek-v4-flash-thinking` as the
+target of the `deepseek-thinking` / `thinker` aliases); they are left out until documented.
 
 ## Hugging Face (`huggingface`)
 
 Local encoder checkpoints run through `transformers`; they are free, have no API pricing and no
 reasoning settings. Only verify the repo id still exists, e.g.
 <https://huggingface.co/princeton-nlp/sup-simcse-bert-base-uncased>.
+
+## Ollama (`ollama`) and vLLM (`vllm`)
+
+Local servers: no pricing, no vendor model list. Entries follow the local `ollama list` tags and plyserve's
+`models.toml`, with sampling from the model cards; `make test-models` skips both. Nothing to fetch on an update.
 
 ## After editing
 

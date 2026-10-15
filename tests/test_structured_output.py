@@ -222,7 +222,7 @@ def _gemini(response: GenerateContentResponse) -> GeminiLLMClient:
 def test_gemini_blocked_answer_is_a_refusal(response: GenerateContentResponse):
     # Gemini has no refusal message: a declined request is a blocked prompt or an answer stopped by a filter
     with pytest.raises(LLMCallError) as caught:
-        _generate(_gemini(response), "gemini-3.5-flash", LLMCallOptions(thinking_enabled=True))
+        _generate(_gemini(response), "gemini-3.6-flash", LLMCallOptions(thinking_enabled=True))
 
     assert caught.value.kind is FailureKind.REFUSAL
     assert caught.value.response is not None

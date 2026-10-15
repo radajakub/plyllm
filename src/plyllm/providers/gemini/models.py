@@ -115,6 +115,18 @@ def gemini_models() -> list[GeminiLLMModel]:
     # follows only for some models. The pricing page lists no 3.7 Flash or 3.5 Flash, so their cache price
     # is unknown and stays 0
     return [
+        # priced at 2.0 / 10.0 (cache read 0.1) through 2026-11-30, then 4.0 / 20.0 (0.2); implicit caching only
+        GeminiLLMModel(
+            "gemini-4-argon",
+            "gemini-4-argon",
+            input_cost=2.0,
+            output_cost=10.0,
+            cached_input_cost=0.1,
+            thinking=True,
+            thinking_only=True,
+            uses_thinking_level=True,
+            supported_reasoning=_GEMINI_REASONING,
+        ),
         GeminiLLMModel(
             "gemini-3.8-flash",
             "gemini-3.8-flash",
@@ -126,6 +138,8 @@ def gemini_models() -> list[GeminiLLMModel]:
             uses_thinking_level=True,
             supported_reasoning=_GEMINI_REASONING,
         ),
+        # deprecated by Google; the endpoint is still listed but routes to gemini-3.8-flash, so it would not run this
+        # model. Retired, kept so recorded results still load; its price is the last one the pricing page listed
         GeminiLLMModel(
             "gemini-3.7-flash",
             "gemini-3.7-flash",
@@ -135,6 +149,7 @@ def gemini_models() -> list[GeminiLLMModel]:
             thinking_only=True,
             uses_thinking_level=True,
             supported_reasoning=_GEMINI_REASONING,
+            retired=True,
         ),
         # 3.8 / 3.7 / 3.6 Flash are priced at 0.75 / 3.75 (cache read 0.075) through 2026-12-31, then 1.5 / 7.5 (0.15)
         GeminiLLMModel(
@@ -148,8 +163,17 @@ def gemini_models() -> list[GeminiLLMModel]:
             uses_thinking_level=True,
             supported_reasoning=_GEMINI3_FULL,
         ),
+        # deprecated by Google; the endpoint is still listed but routes to gemini-3.6-flash. Retired, as 3.7 Flash
         GeminiLLMModel(
-            "gemini-3.5-flash", "gemini-3.5-flash", input_cost=1.5, output_cost=9.0, thinking=True, thinking_only=True, uses_thinking_level=True, supported_reasoning=_GEMINI3_FULL
+            "gemini-3.5-flash",
+            "gemini-3.5-flash",
+            input_cost=1.5,
+            output_cost=9.0,
+            thinking=True,
+            thinking_only=True,
+            uses_thinking_level=True,
+            supported_reasoning=_GEMINI3_FULL,
+            retired=True,
         ),
         GeminiLLMModel(
             "gemini-3.5-flash-lite",

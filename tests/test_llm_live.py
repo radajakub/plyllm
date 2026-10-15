@@ -131,8 +131,9 @@ def test_no_paid_case_can_cost_more_than_a_few_cents(case: str):
 
 
 @pytest.mark.online
-# a vLLM server serves the one model it was started with, so the others in its registry are never all there
-@pytest.mark.parametrize("provider", [provider for provider in Provider if provider not in (Provider.HUGGINGFACE, Provider.VLLM)])
+# a vLLM server serves the one model it was started with, so the others in its registry are never all there;
+# Ollama is a local server that has to be started by hand
+@pytest.mark.parametrize("provider", [provider for provider in Provider if provider not in (Provider.HUGGINGFACE, Provider.VLLM, Provider.OLLAMA)])
 def test_every_active_model_is_still_served(llm: LLM, provider: Provider):
     """A model the provider stopped serving fails a run with a 400 that reads like an outage. It is marked
     `retired=True` in its models.py instead of deleted, so recorded results still load and cost."""
@@ -197,7 +198,8 @@ def test_a_decision(llm: LLM, live_costs: list[float]):
         Choice("parity", "Which parity does the number in the input have?", [ChoiceOption("even"), ChoiceOption("odd")]),
     ]
 
-    response = _run(llm, llm.decide(config, "4", questions))
+    # a bare "4" gave a near coin flip on the choice (odd 0.54) while the predicate was right
+    response = _run(llm, llm.decide(config, "The number is 4.", questions))
 
     even, parity = response.answers
     assert isinstance(even, PredicateAnswer) and even.probability > 0.5, even

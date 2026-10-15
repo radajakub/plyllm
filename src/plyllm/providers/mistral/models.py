@@ -40,7 +40,8 @@ def mistral_models() -> list[MistralLLMModel]:
     # no rate limits are declared here: Mistral's per-model TPM/RPS quotas are account-specific, so
     # they are the caller's to apply via LLM.set_model_limits() (see scripts/_shared.py)
     return [
-        # sale price with no announced end date; the list price is 1.36 / 4.18 (cached 0.14)
+        # sale price with no announced end date; the list price is 1.36 / 4.18 (cached 0.14). A public preview
+        # (v26.10, 2026-10-06), not a stable release
         MistralLLMModel(
             "mistral-large-4",
             "mistral-large-4",
