@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-16
+
 ### Added
 
 - Ollama: `qwen-3.8-27b-q8`, the Q8_0 GGUF of Qwen3.8-27B that plyserve serves with its Ollama backend, under the
