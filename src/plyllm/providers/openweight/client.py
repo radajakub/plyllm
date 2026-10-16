@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from plyllm.message import LLMMessage
 from plyllm.options import LLMCallOptions
-from plyllm.providers.openweight.common import OpenWeightClientBase, asks_in_prompt, json_body, schema_instructions, split_think
+from plyllm.providers.openweight.common import OpenWeightClientBase, asks_in_prompt, enforces, json_body, schema_instructions, split_think
 from plyllm.providers.openweight.models import OpenWeightLLMModel
 from plyllm.response import LLMResponse
 from plyllm.tokens import LLMTokens
@@ -44,14 +44,13 @@ class OpenWeightLLMClient(OpenWeightClientBase[OpenWeightLLMModel, ChatCompletio
 
     def _request(self, model: OpenWeightLLMModel, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None) -> dict[str, Any]:
         params = model.extract_params(options)
-        ask_in_prompt = asks_in_prompt(model, output_schema)
-        instructions = schema_instructions(system.content, output_schema) if ask_in_prompt and output_schema else system.content
+        instructions = schema_instructions(system.content, output_schema) if asks_in_prompt(model.schema_delivery, output_schema) and output_schema else system.content
         kwargs: dict[str, Any] = dict(
             model=model.model_string,
             messages=[LLMMessage.system(instructions).to_dict(), *(message.to_dict() for message in messages)],
             **params,
         )
-        if output_schema is not None and not ask_in_prompt:
+        if enforces(model.schema_delivery, output_schema) and output_schema is not None:
             # the strict schema chat.completions.parse() would send; the answer is checked by LLMClient._answer
             # rather than inside the SDK, so one that does not fit keeps its raw text and tokens
             kwargs["response_format"] = type_to_response_format_param(output_schema)
@@ -66,7 +65,7 @@ class OpenWeightLLMClient(OpenWeightClientBase[OpenWeightLLMModel, ChatCompletio
     def _parse(self, model: OpenWeightLLMModel, response: ChatCompletion, output_schema: type[BaseModel] | None) -> LLMResponse:
         message = response.choices[0].message
         output_text, reasoning = _text_and_reasoning(message)
-        if asks_in_prompt(model, output_schema):
+        if asks_in_prompt(model.schema_delivery, output_schema):
             output_text = json_body(output_text)
         tokens = _tokens(response.usage)
 

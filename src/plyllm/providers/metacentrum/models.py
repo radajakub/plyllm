@@ -5,6 +5,7 @@ from typing import Any
 
 from plyllm.model import LLMModel
 from plyllm.options import LLMCallOptions, ReasoningEffort
+from plyllm.providers.openweight.models import SchemaDelivery
 
 _DEFAULT_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "medium", "high"})
 _KIMI_REASONING: frozenset[ReasoningEffort] = frozenset({"low", "high", "max"})
@@ -27,7 +28,7 @@ class MetacentrumLLMModel(LLMModel):
         thinking: bool = False,
         thinking_only: bool = False,
         needs_effort_to_think: bool = False,
-        weak_structured_output: bool = False,
+        schema_delivery: SchemaDelivery = SchemaDelivery.ENFORCED,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
         retired: bool = False,
         extra_body_thinking: dict[str, Any] | None = None,
@@ -40,11 +41,11 @@ class MetacentrumLLMModel(LLMModel):
             output_cost=0,
             thinking=thinking,
             thinking_only=thinking_only,
-            weak_structured_output=weak_structured_output,
             supported_reasoning=supported_reasoning,
             retired=retired,
             needs_effort_to_think=needs_effort_to_think,
         )
+        self.schema_delivery = schema_delivery
         # vLLM fields outside the Responses API (chat template switches, sampling), sent with or without thinking
         self.extra_body_thinking = extra_body_thinking or {}
         self.extra_body_no_thinking = extra_body_no_thinking or {}
@@ -80,24 +81,24 @@ def metacentrum_models() -> list[MetacentrumLLMModel]:
     return [
         MetacentrumLLMModel("gpt-oss-120b", "gpt-oss-120b", thinking=True, thinking_only=True, supported_reasoning=_DEFAULT_REASONING),
         MetacentrumLLMModel("deepseek-v4.1-flash", "deepseek-v4.1-flash", thinking=True, thinking_only=True),
-        MetacentrumLLMModel("glm-5.3", "glm-5.3", thinking=True, weak_structured_output=True),
+        MetacentrumLLMModel("glm-5.3", "glm-5.3", thinking=True, schema_delivery=SchemaDelivery.PROMPT),
         MetacentrumLLMModel("kimi-k3", "kimi-k3", thinking=True, supported_reasoning=_KIMI_REASONING, extra_body_no_thinking=_KIMI_NO_THINKING),
         MetacentrumLLMModel("qwen-3.5", "qwen3.5", thinking=True, extra_body_thinking=_QWEN3_5_THINKING, extra_body_no_thinking=_QWEN_NO_THINKING),
         MetacentrumLLMModel(
             "qwen-3.8-27b",
             "qwen3.8-27b",
             thinking=True,
-            weak_structured_output=True,
+            schema_delivery=SchemaDelivery.PROMPT,
             supported_reasoning=_QWEN3_8_REASONING,
             extra_body_no_thinking=_QWEN3_8_NO_THINKING,
         ),
         MetacentrumLLMModel("qwen-3.8-flash-next", "qwen3.8-flash-next", thinking=True, extra_body_no_thinking=_QWEN_NO_THINKING),
         MetacentrumLLMModel("mistral-medium-3.5", "mistral-medium-3.5"),
-        MetacentrumLLMModel("gemma-4", "gemma4", thinking=True, needs_effort_to_think=True, weak_structured_output=True, supported_reasoning=_DEFAULT_REASONING),
+        MetacentrumLLMModel("gemma-4", "gemma4", thinking=True, needs_effort_to_think=True, schema_delivery=SchemaDelivery.PROMPT, supported_reasoning=_DEFAULT_REASONING),
         # no longer served by e-INFRA as of 2026-09-24; kept so recorded results still load
         MetacentrumLLMModel("deepseek-v4-flash", "deepseek-v4-flash", thinking=True, retired=True),
         MetacentrumLLMModel("deepseek-v3.2-thinking", "deepseek-v3.2-thinking", thinking=True, retired=True),
         MetacentrumLLMModel("qwen-3.5-122b", "qwen3.5-122b", thinking=True, retired=True, extra_body_thinking=_QWEN3_5_THINKING),
-        MetacentrumLLMModel("glm-5.2", "glm-5.2", thinking=True, weak_structured_output=True, retired=True),
+        MetacentrumLLMModel("glm-5.2", "glm-5.2", thinking=True, schema_delivery=SchemaDelivery.PROMPT, retired=True),
         MetacentrumLLMModel("mistral-small-4", "mistral-small-4", thinking=True, retired=True),
     ]

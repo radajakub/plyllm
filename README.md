@@ -230,7 +230,9 @@ assert model.model_name in await llm.served_models(Provider.VLLM)  # one server 
 - Every request sends the model's full sampling set (from its model card), so the server's defaults from
   `generation_config.json` never apply. `temperature` overrides only the temperature.
 - Thinking and `reasoning_effort` are chat template variables (`chat_template_kwargs`).
-- A schema is asked for in the prompt, not enforced by the server (`weak_structured_output`).
+- How an output schema reaches the model is set per model (`SchemaDelivery`): enforced by the server
+  (`ENFORCED`), in the system prompt only (`PROMPT`), or both (`PROMPT_AND_ENFORCED`). Under guided decoding the
+  model does not see the schema, so `qwen-3.8-27b-fp8` gets both; `gemma-4-31b-fp8` gets it in the prompt only.
 - Calls cost nothing. Concurrency defaults to 32.
 
 ### Ollama (a local server)

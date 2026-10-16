@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from plyllm.client import DEFAULT_RETRIES, LLMClient, ModelT, ResponseT
 from plyllm.errors import FailureKind, retryable_status, status_kind
-from plyllm.model import LLMModel
+from plyllm.providers.openweight.models import SchemaDelivery
 
 # What every client of an open-weight model server shares, whether we run the server (vllm) or someone else does
 # (metacentrum). Only the reading of answers and the handling of errors live here: nothing that sets how the
@@ -36,9 +36,12 @@ def schema_instructions(system: str, output_schema: type[BaseModel]) -> str:
     )
 
 
-def asks_in_prompt(model: LLMModel, output_schema: type[BaseModel] | None) -> bool:
-    # a schema this model cannot have enforced without looping is asked for in the prompt instead
-    return output_schema is not None and model.weak_structured_output
+def asks_in_prompt(delivery: SchemaDelivery, output_schema: type[BaseModel] | None) -> bool:
+    return output_schema is not None and delivery.in_prompt
+
+
+def enforces(delivery: SchemaDelivery, output_schema: type[BaseModel] | None) -> bool:
+    return output_schema is not None and delivery.enforced
 
 
 def json_body(text: str) -> str:

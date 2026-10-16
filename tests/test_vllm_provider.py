@@ -14,7 +14,7 @@ from openai.types.chat import ChatCompletion
 from pydantic import BaseModel
 
 from plyllm import LLM, FailureKind, LLMCallError, LLMCallOptions, LLMConfig, LLMMessage, Provider, VllmProviderConfig
-from plyllm.providers.openweight.models import OpenWeightLLMModel
+from plyllm.providers.openweight.models import OpenWeightLLMModel, SchemaDelivery
 from plyllm.providers.vllm.client import VllmLLMClient
 from plyllm.providers.vllm.models import vllm_models
 
@@ -199,13 +199,35 @@ def test_the_schema_is_asked_for_in_the_prompt_and_a_fenced_answer_is_unwrapped(
 def test_a_model_marked_for_enforcement_sends_the_strict_schema():
     # also pins the private `type_to_response_format_param` import against SDK upgrades
     client, completions = _client(_completion('{"answer": 4}'))
+    client.resolve_model("gemma-4-31b-fp8").schema_delivery = SchemaDelivery.ENFORCED
 
-    response = _generate(client, "qwen-3.8-27b-fp8", LLMCallOptions(), _Answer)
+    response = _generate(client, "gemma-4-31b-fp8", LLMCallOptions(), _Answer)
 
     assert completions.kwargs["response_format"] == type_to_response_format_param(_Answer)
     assert completions.kwargs["response_format"]["json_schema"]["strict"] is True
     assert completions.kwargs["messages"][0]["content"] == "Answer."
     assert response.resolve_structured_output(_Answer).answer == 4
+
+
+def test_qwen_gets_the_schema_in_the_prompt_and_enforced():
+    # enforced alone, qwen did not know which field came next and wrote whitespace until max_tokens (2026-10-16)
+    client, completions = _client(_completion('{"answer": 4}'))
+
+    response = _generate(client, "qwen-3.8-27b-fp8", LLMCallOptions(), _Answer)
+
+    assert completions.kwargs["response_format"] == type_to_response_format_param(_Answer)
+    system = completions.kwargs["messages"][0]["content"]
+    assert system.startswith("Answer.") and "do not repeat the schema itself" in system
+    assert response.resolve_structured_output(_Answer).answer == 4
+
+
+def test_without_an_output_schema_no_delivery_changes_the_request():
+    client, completions = _client(_completion("4"))
+
+    _generate(client, "qwen-3.8-27b-fp8", LLMCallOptions())
+
+    assert "response_format" not in completions.kwargs
+    assert completions.kwargs["messages"][0]["content"] == "Answer."
 
 
 def test_an_answer_off_the_schema_keeps_its_text():

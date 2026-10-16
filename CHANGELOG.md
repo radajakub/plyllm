@@ -6,6 +6,22 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `weak_structured_output` is replaced by `schema_delivery: SchemaDelivery` (`ENFORCED`, `PROMPT`,
+  `PROMPT_AND_ENFORCED`), and it moves from `LLMModel` to the open-weight models (`OpenWeightLLMModel`,
+  `OllamaLLMModel`, `MetacentrumLLMModel`), the only clients that read it. `weak_structured_output=True` is now
+  `SchemaDelivery.PROMPT`; the default stays `ENFORCED`. Requests of every Metacentrum, Ollama and gemma entry
+  are unchanged.
+- vLLM: `qwen-3.8-27b-fp8` gets the schema in the prompt as well as enforced (`PROMPT_AND_ENFORCED`). Enforced
+  alone (1.2.3), it sometimes wrote `{"labels": []` and then whitespace until `max_tokens`: under guided decoding
+  the model does not see the schema, so it did not know a field was still to come. On trial: a judge run under the
+  same cache key reuses earlier answers, so give it a new revision.
+
+### Removed
+
+- `scripts/smoke_vllm.py`, the one-off vLLM smoke test (kept in git history, `c4c5907`).
+
 ## [1.2.3] - 2026-10-15
 
 ### Changed

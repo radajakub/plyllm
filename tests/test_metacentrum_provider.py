@@ -2,7 +2,7 @@
 
 Some hosted models support JSON schema and still cannot have one enforced: under grammar-constrained
 decoding gemma-4 loops forever, because the grammar forbids the EOS token and its repetition bias has
-nowhere else to go (vllm-project/vllm#40080). `weak_structured_output` marks those, and this is what the
+nowhere else to go (vllm-project/vllm#40080). `SchemaDelivery.PROMPT` marks those, and this is what the
 flag does -- until now it was stored on the model and read nowhere at all.
 """
 
@@ -18,6 +18,7 @@ from plyllm import LLMCallOptions, LLMConfig
 from plyllm.providers.metacentrum.client import silence_proxy_serializer_warnings
 from plyllm.providers.metacentrum.models import metacentrum_models
 from plyllm.providers.openweight.common import json_body, schema_instructions
+from plyllm.providers.openweight.models import SchemaDelivery
 
 
 class Label(BaseModel):
@@ -51,9 +52,9 @@ def test_the_models_that_cannot_have_a_schema_enforced_are_marked():
     # the earlier claim here was that only gemma-4 was affected. A live annotation wave disproved it:
     # qwen-3.8-27b lost 132 of 361 calls to the same `{"labels": []` + whitespace loop, so the pathology
     # is this endpoint's guided decoding, not one model's quirk
-    assert _model("gemma-4").weak_structured_output
-    assert _model("qwen-3.8-27b").weak_structured_output
-    assert not _model("gpt-oss-120b").weak_structured_output, "the flag is per model, not a blanket switch -- unaffected models keep enforcement"
+    assert _model("gemma-4").schema_delivery is SchemaDelivery.PROMPT
+    assert _model("qwen-3.8-27b").schema_delivery is SchemaDelivery.PROMPT
+    assert _model("gpt-oss-120b").schema_delivery is SchemaDelivery.ENFORCED, "the flag is per model, not a blanket switch -- unaffected models keep enforcement"
     assert _model("gemma-4").can_use_json_schema, "the model does support structured output -- enforcing it is what breaks"
 
 

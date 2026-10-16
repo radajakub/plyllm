@@ -5,9 +5,26 @@ from typing import Any
 
 from plyllm.model import LLMModel
 from plyllm.options import LLMCallOptions, ReasoningEffort
+from plyllm.utils import ExtendedEnum
 
 # a sampling parameter: temperature, top_p, top_k, min_p, presence_penalty, repetition_penalty
 Sampling = dict[str, float | int]
+
+
+class SchemaDelivery(ExtendedEnum):
+    # how an output schema reaches a model on an open-weight server. Under guided decoding the model does not see the
+    # schema, so with ENFORCED alone it does not know which fields come next
+    ENFORCED = "enforced"  # the server enforces it (response_format)
+    PROMPT = "prompt"  # it is in the system prompt only, for a model that loops when it is enforced
+    PROMPT_AND_ENFORCED = "prompt_and_enforced"  # in the prompt, and enforced by the server
+
+    @property
+    def in_prompt(self) -> bool:
+        return self is not SchemaDelivery.ENFORCED
+
+    @property
+    def enforced(self) -> bool:
+        return self is not SchemaDelivery.PROMPT
 
 
 class OpenWeightLLMModel(LLMModel):
@@ -24,7 +41,7 @@ class OpenWeightLLMModel(LLMModel):
         template_no_thinking: dict[str, Any] | None = None,
         thinking: bool = False,
         thinking_only: bool = False,
-        weak_structured_output: bool = False,
+        schema_delivery: SchemaDelivery = SchemaDelivery.ENFORCED,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
         retired: bool = False,
         needs_effort_to_think: bool = False,
@@ -36,7 +53,6 @@ class OpenWeightLLMModel(LLMModel):
             served_name or model_name,
             thinking=thinking,
             thinking_only=thinking_only,
-            weak_structured_output=weak_structured_output,
             supported_reasoning=supported_reasoning,
             retired=retired,
             needs_effort_to_think=needs_effort_to_think,
@@ -45,6 +61,7 @@ class OpenWeightLLMModel(LLMModel):
             raise ValueError(f"Model {model_name} reasons, so it needs sampling_thinking")
         if not thinking_only and sampling_no_thinking is None:
             raise ValueError(f"Model {model_name} answers without thinking, so it needs sampling_no_thinking")
+        self.schema_delivery = schema_delivery
         self.sampling_thinking = sampling_thinking or {}
         self.sampling_no_thinking = sampling_no_thinking or {}
         # chat_template_kwargs for each thinking mode

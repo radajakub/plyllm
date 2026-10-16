@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from plyllm.options import LLMCallOptions, ReasoningEffort
-from plyllm.providers.openweight.models import OpenWeightLLMModel, Sampling
+from plyllm.providers.openweight.models import OpenWeightLLMModel, Sampling, SchemaDelivery
 
 # what Ollama's /v1/chat/completions takes of the sampling (docs at v0.32.15). top_k, min_p and repeat_penalty are not
 # among them: they come from the model's Modelfile, so a registry entry names the Modelfile it was checked against
@@ -21,7 +21,7 @@ class OllamaLLMModel(OpenWeightLLMModel):
         sampling_no_thinking: Sampling | None = None,
         thinking: bool = False,
         thinking_only: bool = False,
-        weak_structured_output: bool = False,
+        schema_delivery: SchemaDelivery = SchemaDelivery.ENFORCED,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
         retired: bool = False,
     ) -> None:
@@ -35,7 +35,7 @@ class OllamaLLMModel(OpenWeightLLMModel):
             sampling_no_thinking,
             thinking=thinking,
             thinking_only=thinking_only,
-            weak_structured_output=weak_structured_output,
+            schema_delivery=schema_delivery,
             supported_reasoning=supported_reasoning,
             retired=retired,
             # a model with effort levels always gets the caller's, never one chosen here
@@ -65,5 +65,5 @@ def ollama_models() -> list[OllamaLLMModel]:
         # Probe on Ollama 0.32.15: effort "none" gives no reasoning, the reasoning comes in its own field and the
         # schema in the prompt gives plain JSON. With thinking on it gave no reasoning for "2 + 2" but some with
         # the schema; whether "medium" always turns thinking on is not yet checked
-        OllamaLLMModel("gemma-4-e4b", "gemma4:e4b", sampling_thinking=_GEMMA4, sampling_no_thinking=_GEMMA4, thinking=True, weak_structured_output=True),
+        OllamaLLMModel("gemma-4-e4b", "gemma4:e4b", sampling_thinking=_GEMMA4, sampling_no_thinking=_GEMMA4, thinking=True, schema_delivery=SchemaDelivery.PROMPT),
     ]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from plyllm.options import ReasoningEffort
-from plyllm.providers.openweight.models import OpenWeightLLMModel, Sampling
+from plyllm.providers.openweight.models import OpenWeightLLMModel, Sampling, SchemaDelivery
 
 # Sampling from the model cards at the revisions plyserve's models.toml pins (read 2026-10-11). Parameters a card does
 # not name are sent at their neutral values, so nothing is left to the server.
@@ -22,8 +22,9 @@ def vllm_models() -> list[OpenWeightLLMModel]:
     # Served names exactly as in plyserve's models.toml: the server is started under that name, so a model added
     # there is added here with the same string. Flags are from the chat templates, not from a probe of our server.
     # Gemma asks for the schema in the prompt: enforced, it made both models loop on Metacentrum's vLLM
-    # (vllm-project/vllm#40080). Qwen has it enforced, on trial on our vLLM: in the prompt it lost 1-4% of answers as
-    # unparseable on real traces (2026-10-13)
+    # (vllm-project/vllm#40080). Qwen, on trial on our vLLM: in the prompt only, it lost 1-4% of answers as
+    # unparseable on real traces (2026-10-13); enforced only, it wrote `{"labels": []` and then whitespace until
+    # max_tokens, not knowing a field was still to come (2026-10-16). So it gets both
     return [
         OpenWeightLLMModel(
             "qwen-3.8-27b-fp8",
@@ -32,7 +33,7 @@ def vllm_models() -> list[OpenWeightLLMModel]:
             template_thinking=_THINKING,
             template_no_thinking=_NO_THINKING,
             thinking=True,
-            weak_structured_output=False,
+            schema_delivery=SchemaDelivery.PROMPT_AND_ENFORCED,
             supported_reasoning=_QWEN3_8_REASONING,
         ),
         OpenWeightLLMModel(
@@ -42,6 +43,6 @@ def vllm_models() -> list[OpenWeightLLMModel]:
             template_thinking=_THINKING,
             template_no_thinking=_NO_THINKING,
             thinking=True,
-            weak_structured_output=True,
+            schema_delivery=SchemaDelivery.PROMPT,
         ),
     ]

@@ -109,7 +109,6 @@ class LLMModel(ABC):
         thinking: bool = False,
         thinking_only: bool = False,
         can_use_json_schema: bool = True,
-        weak_structured_output: bool = False,
         supported_reasoning: frozenset[ReasoningEffort] | None = None,
         limits: ModelLimits | None = None,
         default_output_estimate: int = DEFAULT_OUTPUT_ESTIMATE,
@@ -133,8 +132,6 @@ class LLMModel(ABC):
         self.thinking = thinking  # if the model supports thinking
         self.thinking_only = thinking_only  # if the model only supports thinking
         self.can_use_json_schema = can_use_json_schema  # if the model can use JSON schema for structured output
-        # models without robust native structured output need the schema injected into the prompt
-        self.weak_structured_output = weak_structured_output
         self.supported_reasoning = supported_reasoning
         # per-model quota; None means only the provider-wide semaphore applies
         self.limits = limits

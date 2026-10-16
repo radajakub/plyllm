@@ -15,7 +15,7 @@ from plyllm.llm_config import LLMConfig
 from plyllm.message import LLMMessage
 from plyllm.options import LLMCallOptions
 from plyllm.providers.metacentrum.models import MetacentrumLLMModel, metacentrum_models
-from plyllm.providers.openweight.common import OpenWeightClientBase, asks_in_prompt, json_body, schema_instructions, split_think
+from plyllm.providers.openweight.common import OpenWeightClientBase, asks_in_prompt, enforces, json_body, schema_instructions, split_think
 from plyllm.providers.providers import Provider
 from plyllm.response import LLMResponse
 from plyllm.tokens import LLMTokens
@@ -100,8 +100,7 @@ class MetacentrumLLMClient(OpenWeightClientBase[MetacentrumLLMModel, Response]):
     ) -> dict[str, Any]:
         params = model.extract_params(options)
         extra_body = model.extract_extra_body(options)
-        ask_in_prompt = asks_in_prompt(model, output_schema)
-        instructions = schema_instructions(system.content, output_schema) if ask_in_prompt and output_schema else system.content
+        instructions = schema_instructions(system.content, output_schema) if asks_in_prompt(model.schema_delivery, output_schema) and output_schema else system.content
         kwargs: dict[str, Any] = dict(
             model=model.model_string,
             instructions=instructions,
@@ -110,7 +109,7 @@ class MetacentrumLLMClient(OpenWeightClientBase[MetacentrumLLMModel, Response]):
             extra_body=extra_body,
             **params,
         )
-        if output_schema is not None and not ask_in_prompt:
+        if enforces(model.schema_delivery, output_schema) and output_schema is not None:
             # the strict schema responses.parse() would send; the answer is checked by LLMClient._answer
             # rather than inside the SDK, so one that does not fit keeps its raw text and tokens
             kwargs["text"] = {"format": type_to_text_format_param(output_schema)}
@@ -125,7 +124,7 @@ class MetacentrumLLMClient(OpenWeightClientBase[MetacentrumLLMModel, Response]):
     def _parse(self, model: MetacentrumLLMModel, response: Response, output_schema: type[BaseModel] | None) -> LLMResponse:
         # every path strips the inline <think> block a hosted model may emit before the answer is read as JSON
         output_text, reasoning = _extract_text_and_reasoning(response)
-        if asks_in_prompt(model, output_schema):
+        if asks_in_prompt(model.schema_delivery, output_schema):
             output_text = json_body(output_text)
         tokens = responses_tokens(response.usage)
 
