@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+
+- Ollama: `qwen-3.8-27b-q8`, the Q8_0 GGUF of Qwen3.8-27B that plyserve serves with its Ollama backend, under the
+  same name. Reached with `OLLAMA_BASE_URL` and `OLLAMA_API_KEY` set to plyserve's endpoint and key. Thinking on or
+  off only; reasoning levels and the enforced schema with thinking are not yet probed on Ollama.
+
 ### Changed
 
 - **Breaking:** `weak_structured_output` is replaced by `schema_delivery: SchemaDelivery` (`ENFORCED`, `PROMPT`,

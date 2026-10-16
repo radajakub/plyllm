@@ -54,6 +54,10 @@ class OllamaLLMModel(OpenWeightLLMModel):
 # Gemma 4 card: temperature 1.0, top_p 0.95, top_k 64 in every mode. Penalties are not on the card and are sent at
 # their neutral values
 _GEMMA4: Sampling = {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 0.0, "frequency_penalty": 0.0}
+# Qwen3.8 card, the fields /v1 takes: one set for thinking, another for instruct mode, as on vLLM. top_k 20 (both modes)
+# comes from the Modelfile plyserve writes from its models.toml
+_QWEN3_8_THINKING: Sampling = {"temperature": 1.0, "top_p": 0.95, "presence_penalty": 0.0, "frequency_penalty": 0.0}
+_QWEN3_8_NO_THINKING: Sampling = {"temperature": 0.7, "top_p": 0.8, "presence_penalty": 1.5, "frequency_penalty": 0.0}
 
 
 def ollama_models() -> list[OllamaLLMModel]:
@@ -66,4 +70,17 @@ def ollama_models() -> list[OllamaLLMModel]:
         # schema in the prompt gives plain JSON. With thinking on it gave no reasoning for "2 + 2" but some with
         # the schema; whether "medium" always turns thinking on is not yet checked
         OllamaLLMModel("gemma-4-e4b", "gemma4:e4b", sampling_thinking=_GEMMA4, sampling_no_thinking=_GEMMA4, thinking=True, schema_delivery=SchemaDelivery.PROMPT),
+        # Served by plyserve (backend "ollama"), not pulled: plyserve creates the tag from a pinned GGUF under its served
+        # name and puts a key-checking proxy in front, so a client sets OLLAMA_BASE_URL and OLLAMA_API_KEY to the
+        # endpoint and key plyserve gives. The same model as vllm's qwen-3.8-27b-fp8 in another 8-bit format, to
+        # compare the engines, so the same schema delivery. Not yet probed on Ollama: whether reasoning_effort levels
+        # reach the template (until then thinking is only on or off) and how the enforced schema works with thinking
+        OllamaLLMModel(
+            "qwen-3.8-27b-q8",
+            "qwen-3.8-27b-q8",
+            sampling_thinking=_QWEN3_8_THINKING,
+            sampling_no_thinking=_QWEN3_8_NO_THINKING,
+            thinking=True,
+            schema_delivery=SchemaDelivery.PROMPT_AND_ENFORCED,
+        ),
     ]
