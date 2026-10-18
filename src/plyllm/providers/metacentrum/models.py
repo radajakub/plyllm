@@ -78,17 +78,20 @@ def metacentrum_models() -> list[MetacentrumLLMModel]:
     # Thinking flags follow a probe on 2026-10-09 (reasoning tokens with thinking on / off): gpt-oss-120b and
     # deepseek-v4.1-flash reason whatever is sent, gemma-4 reasons only when given an effort, and
     # mistral-medium-3.5 returned no reasoning with thinking on
+    # qwen-3.8-27b and glm-5.3 get the schema in the prompt as well as enforced: enforced alone, qwen wrote
+    # `{"labels": []` and then whitespace until max_tokens (132 of 361 calls); with both, our vLLM qwen had
+    # 0 of 1199 unparseable and no loop (2026-10-18). gemma-4 stays prompt-only (loops when enforced)
     return [
         MetacentrumLLMModel("gpt-oss-120b", "gpt-oss-120b", thinking=True, thinking_only=True, supported_reasoning=_DEFAULT_REASONING),
         MetacentrumLLMModel("deepseek-v4.1-flash", "deepseek-v4.1-flash", thinking=True, thinking_only=True),
-        MetacentrumLLMModel("glm-5.3", "glm-5.3", thinking=True, schema_delivery=SchemaDelivery.PROMPT),
+        MetacentrumLLMModel("glm-5.3", "glm-5.3", thinking=True, schema_delivery=SchemaDelivery.PROMPT_AND_ENFORCED),
         MetacentrumLLMModel("kimi-k3", "kimi-k3", thinking=True, supported_reasoning=_KIMI_REASONING, extra_body_no_thinking=_KIMI_NO_THINKING),
         MetacentrumLLMModel("qwen-3.5", "qwen3.5", thinking=True, extra_body_thinking=_QWEN3_5_THINKING, extra_body_no_thinking=_QWEN_NO_THINKING),
         MetacentrumLLMModel(
             "qwen-3.8-27b",
             "qwen3.8-27b",
             thinking=True,
-            schema_delivery=SchemaDelivery.PROMPT,
+            schema_delivery=SchemaDelivery.PROMPT_AND_ENFORCED,
             supported_reasoning=_QWEN3_8_REASONING,
             extra_body_no_thinking=_QWEN3_8_NO_THINKING,
         ),

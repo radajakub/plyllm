@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Changed
+
+- Metacentrum: `qwen-3.8-27b` and `glm-5.3` get the schema in the prompt as well as enforced
+  (`PROMPT_AND_ENFORCED`, was `PROMPT`). On our vLLM, the same delivery gave qwen 0 of 1199 unparseable answers and
+  no whitespace loop (2026-10-18). Not yet run on Metacentrum. Their requests change, so a judge run on them needs a
+  new revision. `gemma-4` stays `PROMPT`.
+
 ## [1.3.0] - 2026-10-16
 
 ### Added

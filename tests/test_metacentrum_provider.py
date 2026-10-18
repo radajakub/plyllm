@@ -53,7 +53,10 @@ def test_the_models_that_cannot_have_a_schema_enforced_are_marked():
     # qwen-3.8-27b lost 132 of 361 calls to the same `{"labels": []` + whitespace loop, so the pathology
     # is this endpoint's guided decoding, not one model's quirk
     assert _model("gemma-4").schema_delivery is SchemaDelivery.PROMPT
-    assert _model("qwen-3.8-27b").schema_delivery is SchemaDelivery.PROMPT
+    # enforced alone, qwen-3.8-27b loops; with the schema in the prompt too it knows which field comes next
+    # (our vLLM, 2026-10-18: 0 of 1199 unparseable), so it and glm-5.3 get both
+    assert _model("qwen-3.8-27b").schema_delivery is SchemaDelivery.PROMPT_AND_ENFORCED
+    assert _model("glm-5.3").schema_delivery is SchemaDelivery.PROMPT_AND_ENFORCED
     assert _model("gpt-oss-120b").schema_delivery is SchemaDelivery.ENFORCED, "the flag is per model, not a blanket switch -- unaffected models keep enforcement"
     assert _model("gemma-4").can_use_json_schema, "the model does support structured output -- enforcing it is what breaks"
 
