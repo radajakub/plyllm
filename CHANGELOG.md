@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-18
+
 ### Changed
 
 - Metacentrum: `qwen-3.8-27b` and `glm-5.3` get the schema in the prompt as well as enforced
