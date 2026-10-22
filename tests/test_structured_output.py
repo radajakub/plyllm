@@ -10,15 +10,28 @@ schema surfaced as a schema failure because the SDK choked on the refusal text f
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from types import SimpleNamespace
 from typing import Any, cast
 
+import httpx
 import httpx2
 import pytest
 from anthropic import AsyncAnthropic, transform_schema
+from google import genai
 from google.genai.client import AsyncClient
-from google.genai.types import BlockedReason, Candidate, FinishReason, GenerateContentResponse, GenerateContentResponsePromptFeedback, GenerateContentResponseUsageMetadata
+from google.genai.types import (
+    BlockedReason,
+    Candidate,
+    Content,
+    FinishReason,
+    GenerateContentResponse,
+    GenerateContentResponsePromptFeedback,
+    GenerateContentResponseUsageMetadata,
+    HttpOptions,
+    Part,
+)
 from openai import AsyncOpenAI
 from openai.lib._parsing._responses import type_to_text_format_param
 from pydantic import BaseModel
@@ -26,7 +39,7 @@ from pydantic import BaseModel
 from plyllm import ClaudeProviderConfig, FailureKind, LLMCallError, LLMCallOptions, LLMConfig, LLMMessage, LLMResponse, LLMTokens
 from plyllm.llm_config import DEFAULT_TIMEOUT
 from plyllm.providers.claude.client import ClaudeLLMClient
-from plyllm.providers.gemini.client import GeminiLLMClient
+from plyllm.providers.gemini.client import _MAX_HOPS, GeminiLLMClient
 from plyllm.providers.openai.client import OpenAILLMClient
 from plyllm.providers.openai.models import openai_models
 
@@ -235,6 +248,82 @@ def test_gemini_blocked_prompt_is_kept_apart_from_a_refusal(reason: BlockedReaso
     assert caught.value.kind is FailureKind.PROMPT_BLOCKED
     assert f"prompt blocked ({reason.value})" in str(caught.value)
     assert caught.value.response is not None and caught.value.response.tokens.input_tokens == 368
+
+
+def _hop(parts: list[Part], finish: FinishReason, token: bytes | None = None) -> GenerateContentResponse:
+    candidate = Candidate(content=Content(role="model", parts=parts), finish_reason=finish, continuation_token=token)
+    return GenerateContentResponse(
+        candidates=[candidate], usage_metadata=GenerateContentResponseUsageMetadata(prompt_token_count=100, candidates_token_count=10, thoughts_token_count=5)
+    )
+
+
+def _gemini_hops(hops: list[GenerateContentResponse], configs: list[Any]) -> GeminiLLMClient:
+    # answers the n-th request with the n-th hop, the last one for any request beyond them
+    async def generate_content(**kwargs) -> GenerateContentResponse:
+        configs.append(kwargs["config"])
+        return hops[min(len(configs), len(hops)) - 1]
+
+    return GeminiLLMClient(cast(AsyncClient, SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))), concurrency=1)
+
+
+def test_gemini_answer_split_across_hops_is_joined_and_every_hop_is_paid_for():
+    """Gemini stops a long answer with CONTINUATION and a token; plyllm asks again with the token, joins the
+    hops, and counts each hop's tokens, since each one bills the prompt again."""
+    hops = [
+        _hop([Part(text="weighing the centre", thought=True), Part(text='{"mo')], FinishReason.CONTINUATION, b"resume"),
+        _hop([Part(text='ve": 4}')], FinishReason.STOP),
+    ]
+    configs: list[Any] = []
+
+    response = _generate(_gemini_hops(hops, configs), "gemini-3.6-flash", LLMCallOptions(thinking_enabled=True))
+
+    assert response.resolve_structured_output(_Move) == _Move(move=4)
+    assert response.reasoning == ["weighing the centre"]
+    assert response.tokens == LLMTokens(input_tokens=200, output_tokens=30, reasoning_tokens=10)
+    assert [config.continuation_token for config in configs] == [None, b"resume"]
+    assert all(config.automatic_continuation is False for config in configs)
+
+
+def test_gemini_answer_still_unfinished_after_the_last_hop_is_unparseable_with_its_tokens():
+    configs: list[Any] = []
+    with pytest.raises(LLMCallError) as caught:
+        _generate(_gemini_hops([_hop([Part(text='{"move"')], FinishReason.CONTINUATION, b"resume")], configs), "gemini-3.6-flash", LLMCallOptions(thinking_enabled=True))
+
+    assert len(configs) == _MAX_HOPS
+    assert caught.value.kind is FailureKind.UNPARSEABLE
+    assert caught.value.response is not None and caught.value.response.tokens.input_tokens == 100 * _MAX_HOPS
+
+
+def test_gemini_block_on_a_later_hop_is_a_refusal_with_every_hop_paid_for():
+    hops = [_hop([Part(text='{"mo')], FinishReason.CONTINUATION, b"resume"), _hop([], FinishReason.SAFETY)]
+    with pytest.raises(LLMCallError) as caught:
+        _generate(_gemini_hops(hops, []), "gemini-3.6-flash", LLMCallOptions(thinking_enabled=True))
+
+    assert caught.value.kind is FailureKind.REFUSAL
+    assert caught.value.response is not None and caught.value.response.tokens.input_tokens == 200
+
+
+def test_gemini_hops_through_the_sdk_do_not_crash_on_a_thinking_only_first_hop():
+    """The SDK's own hop following re-reads the joined answer against the schema and raised AttributeError
+    (__pydantic_generic_metadata__, google-genai 2.31) when the first hop was thinking only. This runs the
+    real SDK on fake HTTP."""
+    token = base64.b64encode(b"resume").decode()
+    bodies: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(request.read().decode())
+        if token not in bodies[-1]:
+            candidate = {"finishReason": "CONTINUATION", "continuationToken": token, "content": {"role": "model", "parts": [{"text": "thinking", "thought": True}]}}
+        else:
+            candidate = {"finishReason": "STOP", "content": {"role": "model", "parts": [{"text": '{"move": 4}'}]}}
+        return httpx.Response(200, json={"candidates": [candidate], "usageMetadata": {"promptTokenCount": 100, "candidatesTokenCount": 10}})
+
+    sdk = genai.Client(api_key="fake", http_options=HttpOptions(httpx_async_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))).aio
+    response = _generate(GeminiLLMClient(sdk, concurrency=1), "gemini-3.6-flash", LLMCallOptions(thinking_enabled=True))
+
+    assert len(bodies) == 2
+    assert response.resolve_structured_output(_Move) == _Move(move=4)
+    assert response.tokens.input_tokens == 200
 
 
 def test_a_built_claude_client_sends_long_requests_without_streaming(monkeypatch):

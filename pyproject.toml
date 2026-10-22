@@ -38,7 +38,7 @@ dependencies = [
 [project.optional-dependencies]
 # majors capped at the versions the live tests ran on; lift them in a separate change, with a live run
 openai = ["openai>=3.28.0,<4"]
-gemini = ["google-genai>=2.14.0,<3"]
+gemini = ["google-genai>=2.30.0,<3"]
 grok = ["openai>=3.28.0,<4"]
 anthropic = ["anthropic>=1.13.0,<2"]
 mistral = ["mistralai>=3.2.0,<4"]
@@ -49,7 +49,7 @@ vllm = ["openai>=3.28.0,<4"]
 # ollama is a local server, called through its OpenAI-compatible endpoint
 ollama = ["openai>=3.28.0,<4"]
 huggingface = ["torch>=2.4.0", "transformers>=4.44.0"]
-all = ["openai>=3.28.0,<4", "google-genai>=2.14.0,<3", "anthropic>=1.13.0,<2", "mistralai>=3.2.0,<4", "torch>=2.4.0", "transformers>=4.44.0"]
+all = ["openai>=3.28.0,<4", "google-genai>=2.30.0,<3", "anthropic>=1.13.0,<2", "mistralai>=3.2.0,<4", "torch>=2.4.0", "transformers>=4.44.0"]
 
 [project.urls]
 Repository = "https://github.com/radajakub/plyllm"
@@ -93,7 +93,7 @@ dev = [
     "pyright>=1.1.414",
     # provider SDKs are optional extras; include the API-based ones so the test suite runs
     "openai>=3.28.0,<4",
-    "google-genai>=2.14.0,<3",
+    "google-genai>=2.30.0,<3",
     "anthropic>=1.13.0,<2",
     "mistralai>=3.2.0,<4",
 ]

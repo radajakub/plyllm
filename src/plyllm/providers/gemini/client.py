@@ -8,6 +8,7 @@ from google import genai
 from google.genai.errors import APIError
 from google.genai.types import (
     BatchJob,
+    Candidate,
     Content,
     ContentUnion,
     EmbedContentConfig,
@@ -15,6 +16,7 @@ from google.genai.types import (
     FinishReason,
     GenerateContentConfig,
     GenerateContentResponse,
+    GenerateContentResponseUsageMetadata,
     HttpOptions,
     InlinedRequest,
     Part,
@@ -52,6 +54,9 @@ _REQUEST_OVERHEAD = 100
 _ID_KEY = "plyllm_id"
 # a job that ended without running every request; the docs say an expired job has no results at all
 _UNRUN_KINDS = {"JOB_STATE_EXPIRED": FailureKind.EXPIRED, "JOB_STATE_CANCELLED": FailureKind.CANCELLED, "JOB_STATE_FAILED": FailureKind.PROVIDER}
+# requests one answer may take (see _send). A merge answer of ~40k output tokens took about 4 (2026-10-21); an answer
+# still unfinished after the last one comes back cut off, and fails to parse under a schema
+_MAX_HOPS = 16
 
 
 def _total_tokens(response: GenerateContentResponse) -> int:
@@ -82,6 +87,34 @@ def _unrun(job: BatchJob, stored: StoredBatchJob) -> dict[str, LLMCallError]:
         return {}
     reason = f": {job.error.message}" if job.error is not None and job.error.message else ""
     return {request_id: LLMCallError(kind, f"Batch {stored.batch_id} ended as {state} before this request ran{reason}") for request_id in stored.requests}
+
+
+def _continuation(response: GenerateContentResponse) -> bytes | None:
+    # the token to resume an unfinished answer from, by the SDK's own rule (should_continue_generation)
+    candidate = response.candidates[0] if response.candidates else None
+    if candidate is None or not candidate.continuation_token or candidate.finish_reason not in (None, FinishReason.CONTINUATION):
+        return None
+    return candidate.continuation_token
+
+
+def _usage_sum(hops: list[GenerateContentResponse]) -> GenerateContentResponseUsageMetadata:
+    # each hop is a separate request that bills the whole prompt again, so the hops' counts add up
+    usages = [hop.usage_metadata for hop in hops if hop.usage_metadata is not None]
+    return GenerateContentResponseUsageMetadata(
+        prompt_token_count=sum(usage.prompt_token_count or 0 for usage in usages),
+        candidates_token_count=sum(usage.candidates_token_count or 0 for usage in usages),
+        thoughts_token_count=sum(usage.thoughts_token_count or 0 for usage in usages),
+        cached_content_token_count=sum(usage.cached_content_token_count or 0 for usage in usages),
+    )
+
+
+def _joined(hops: list[GenerateContentResponse]) -> GenerateContentResponse:
+    if len(hops) == 1:
+        return hops[0]
+    last = hops[-1]
+    parts = [part for hop in hops if hop.candidates and hop.candidates[0].content for part in hop.candidates[0].content.parts or []]
+    candidate = (last.candidates[0] if last.candidates else Candidate()).model_copy(update={"content": Content(role="model", parts=parts)})
+    return last.model_copy(update={"candidates": [candidate], "usage_metadata": _usage_sum(hops)})
 
 
 def _prompt_blocked(response: GenerateContentResponse) -> str | None:
@@ -192,7 +225,15 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel, GenerateContentResponse]):
         return dict(model=model.model_string, contents=contents, config=params)
 
     async def _send(self, kwargs: dict[str, Any]) -> GenerateContentResponse:
-        return await self._client.models.generate_content(**kwargs)
+        # Gemini stops a long answer with finish reason CONTINUATION and a token to resume it from. Since 2.30 the
+        # SDK follows those hops itself, then re-reads the joined answer against the schema, which crashes on a
+        # pydantic class (AttributeError __pydantic_generic_metadata__, google-genai 2.31). plyllm follows the hops
+        # instead. The flag is the SDK's own and never sent, so a batch request is unchanged
+        config: GenerateContentConfig = kwargs["config"].model_copy(update={"automatic_continuation": False})
+        hops = [await self._client.models.generate_content(**{**kwargs, "config": config})]
+        while (token := _continuation(hops[-1])) is not None and len(hops) < _MAX_HOPS:
+            hops.append(await self._client.models.generate_content(**{**kwargs, "config": config.model_copy(update={"continuation_token": token})}))
+        return _joined(hops)
 
     def _tokens_of(self, response: GenerateContentResponse) -> int:
         return _total_tokens(response)

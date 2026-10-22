@@ -6,6 +6,20 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Fixed
+
+- Gemini: a long answer that Gemini splits into several requests (finish reason `CONTINUATION` and a continuation
+  token) no longer fails with `AttributeError: __pydantic_generic_metadata__` under a schema. Since google-genai 2.30
+  the SDK follows these requests itself and then re-reads the joined answer against the schema, which crashes when
+  the schema is a pydantic class (seen with 2.31 on a ~40k-token answer, 2026-10-21). plyllm now turns that off
+  (`automatic_continuation=False`) and follows the requests itself, up to 16: the parts are joined in order and the
+  tokens are summed, since each request bills the whole prompt again. Batch requests are unchanged and still do not
+  follow continuations.
+
+### Changed
+
+- `google-genai>=2.30.0` (was `>=2.14.0`), the first version with `automatic_continuation`.
+
 ## [1.3.1] - 2026-10-18
 
 ### Changed
