@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-22
+
 ### Fixed
 
 - Gemini: a long answer that Gemini splits into several requests (finish reason `CONTINUATION` and a continuation
