@@ -24,21 +24,28 @@ def vllm_models() -> list[OpenWeightLLMModel]:
     # Gemma asks for the schema in the prompt: enforced, it made both models loop on Metacentrum's vLLM
     # (vllm-project/vllm#40080). Qwen, on trial on our vLLM: in the prompt only, it lost 1-4% of answers as
     # unparseable on real traces (2026-10-13); enforced only, it wrote `{"labels": []` and then whitespace until
-    # max_tokens, not knowing a field was still to come (2026-10-16). So it gets both.
-    # The -mtp name is the same checkpoint served with speculative decoding: the server differs, the requests do not
+    # max_tokens, not knowing a field was still to come (2026-10-16). So it gets both
     return [
-        *(
-            OpenWeightLLMModel(
-                name,
-                sampling_thinking=_QWEN3_8_THINKING,
-                sampling_no_thinking=_QWEN3_8_NO_THINKING,
-                template_thinking=_THINKING,
-                template_no_thinking=_NO_THINKING,
-                thinking=True,
-                schema_delivery=SchemaDelivery.PROMPT_AND_ENFORCED,
-                supported_reasoning=_QWEN3_8_REASONING,
-            )
-            for name in ("qwen-3.8-27b-fp8", "qwen-3.8-27b-fp8-mtp")
+        OpenWeightLLMModel(
+            "qwen-3.8-27b-fp8",
+            sampling_thinking=_QWEN3_8_THINKING,
+            sampling_no_thinking=_QWEN3_8_NO_THINKING,
+            template_thinking=_THINKING,
+            template_no_thinking=_NO_THINKING,
+            thinking=True,
+            schema_delivery=SchemaDelivery.PROMPT_AND_ENFORCED,
+            supported_reasoning=_QWEN3_8_REASONING,
+        ),
+        # the same checkpoint served with speculative decoding: the server differs, the requests do not
+        OpenWeightLLMModel(
+            "qwen-3.8-27b-fp8-mtp",
+            sampling_thinking=_QWEN3_8_THINKING,
+            sampling_no_thinking=_QWEN3_8_NO_THINKING,
+            template_thinking=_THINKING,
+            template_no_thinking=_NO_THINKING,
+            thinking=True,
+            schema_delivery=SchemaDelivery.PROMPT_AND_ENFORCED,
+            supported_reasoning=_QWEN3_8_REASONING,
         ),
         OpenWeightLLMModel(
             "gemma-4-31b-fp8",
