@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+
+- vLLM: `qwen-3.8-27b-fp8-mtp`, the served name of plyserve's Qwen3.8 FP8 server with MTP speculative decoding.
+  Its requests are those of `qwen-3.8-27b-fp8`.
+
 ## [1.3.2] - 2026-10-22
 
 ### Fixed

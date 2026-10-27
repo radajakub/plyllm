@@ -78,7 +78,7 @@ def test_the_router_builds_the_vllm_client():
 
 def test_the_registry_uses_plyserves_served_names():
     # the contract with plyserve's models.toml: the name sent is the --served-model-name the server runs under
-    assert {model.model_name for model in vllm_models()} == {"qwen-3.8-27b-fp8", "gemma-4-31b-fp8"}
+    assert {model.model_name for model in vllm_models()} == {"qwen-3.8-27b-fp8", "qwen-3.8-27b-fp8-mtp", "gemma-4-31b-fp8"}
     assert all(model.model_string == model.model_name and model.input_cost == model.output_cost == 0 for model in vllm_models())
 
 
