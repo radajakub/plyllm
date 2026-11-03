@@ -59,7 +59,7 @@ class _StubClient(LLMClient):
     def error_kind(self, error: Exception) -> FailureKind:
         return FailureKind.OTHER
 
-    async def generate(self, model_name, system, messages, options, output_schema=None) -> LLMResponse:
+    async def generate(self, model_name, system, messages, options, output_schema=None, seed=None) -> LLMResponse:
         model = self.resolve_model(model_name)
         self.calls.append((model_name, options))
         # routed through _dispatch like every real provider, so limits set on this model apply

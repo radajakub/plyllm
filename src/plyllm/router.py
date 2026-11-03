@@ -123,7 +123,9 @@ class LLM:
         system: LLMMessage,
         messages: list[LLMMessage],
         output_schema: type[BaseModel] | None = None,
+        seed: int | None = None,
     ) -> LLMResponse:
+        # the seed is per call; response.seed says whether the provider took it
         client = self._route(model_config.provider)
         return await client.generate(
             model_config.model_name,
@@ -131,6 +133,7 @@ class LLM:
             messages,
             model_config.options,
             output_schema,
+            seed,
         )
 
     def batch(

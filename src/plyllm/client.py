@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -27,6 +29,18 @@ T = TypeVar("T")
 ModelT = TypeVar("ModelT", bound=LLMModel)
 # the SDK object a provider's generation call returns, which _parse reads
 ResponseT = TypeVar("ResponseT")
+# what a call ends in: an answer, or a failure that may carry the answer that did arrive
+CallResult = TypeVar("CallResult", LLMResponse, LLMCallError)
+
+
+def stamped(result: CallResult, **fields: Any) -> CallResult:
+    # sets fields that describe the call rather than the answer (batch, seed), after parsing: on the response, or on the
+    # response a failed call carries. LLMResponse is frozen, so it is copied; the error is updated in place
+    if isinstance(result, LLMResponse):
+        return replace(result, **fields)
+    if result.response is not None:
+        result.response = replace(result.response, **fields)
+    return result
 
 
 class LLMClient(ABC, Generic[ModelT, ResponseT]):
@@ -251,13 +265,31 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
         messages: list[LLMMessage],
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
+        seed: int | None = None,
     ) -> LLMResponse:
         # the same sequence for every provider. The steps are kept apart so a batch request carries exactly the
         # body generate() sends and its results are read the same way: the same body means the same measurement
         model = self._resolve_for_generate(model_name, output_schema)
         kwargs = self._request(model, system, messages, options, output_schema)
+
+        # the seed belongs to this call, not to the model config, so it is added after the body and batches carry none
+        applied = seed if seed is not None and self._apply_seed(kwargs, seed) else None
+        if seed is not None and applied is None:
+            # the message carries no seed value, so Python's default filter shows it once per provider and model, not on every call
+            warnings.warn(f"{self.provider_key.value} takes no sampling seed, so {model.model_name} is called without one (response.seed is None)", stacklevel=2)
+
         response = await self._dispatch(model, system, messages, options, lambda: self._send(kwargs), self._retry_errors, tokens_of=self._tokens_of)
-        return self._parse(model, response, output_schema)
+
+        try:
+            return stamped(self._parse(model, response, output_schema), seed=applied)
+        except LLMCallError as error:
+            # an answer that arrived and failed (unparseable, refused) records the seed as well
+            stamped(error, seed=applied)
+            raise
+
+    def _apply_seed(self, kwargs: dict[str, Any], seed: int) -> bool:
+        # puts the seed into the request kwargs and returns True; a provider whose API takes no seed keeps this default
+        return False
 
     @abstractmethod
     def _request(self, model: ModelT, system: LLMMessage, messages: list[LLMMessage], options: LLMCallOptions, output_schema: type[BaseModel] | None) -> dict[str, Any]:

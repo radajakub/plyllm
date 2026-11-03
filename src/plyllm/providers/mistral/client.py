@@ -170,6 +170,10 @@ class MistralLLMClient(LLMClient[MistralLLMModel, ChatCompletionResponse]):
             kwargs["response_format"] = response_format_from_pydantic_model(output_schema)
         return kwargs
 
+    def _apply_seed(self, kwargs: dict[str, Any], seed: int) -> bool:
+        kwargs["random_seed"] = seed
+        return True
+
     async def _send(self, kwargs: dict[str, Any]) -> ChatCompletionResponse:
         return await self._client.chat.complete_async(**kwargs)
 

@@ -39,6 +39,8 @@ class LLMResponse:
     structured_output_type: type[BaseModel] | None = None
     # answered through a provider's Batch API, so priced at its batch rate: calculate_cost(..., batch=response.batch)
     batch: bool = False
+    # the sampling seed the request carried; None when none was asked for or the provider's API takes none
+    seed: int | None = None
 
     @classmethod
     def from_parts(

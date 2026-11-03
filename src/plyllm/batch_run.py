@@ -9,7 +9,7 @@ from typing import Any, Generic
 from pydantic import BaseModel
 
 from plyllm.batch import BatchJob, BatchOutcome, BatchRequest, BatchStore, request_hash
-from plyllm.client import LLMClient, ModelT, ResponseT
+from plyllm.client import LLMClient, ModelT, ResponseT, stamped
 from plyllm.errors import FailureKind, LLMCallError, as_call_error
 from plyllm.model_config import ModelConfig
 from plyllm.options import LLMCallOptions
@@ -143,10 +143,11 @@ class BatchRun(Generic[ModelT, ResponseT]):
             elif isinstance(item, LLMCallError):
                 results[request_id] = item
             else:
+                # a batch answer is billed at the batch price; the flag keeps it from being costed at the standard one
                 try:
-                    results[request_id] = _as_batch(self._client._parse(self._model, item, self._output_schema))
+                    results[request_id] = stamped(self._client._parse(self._model, item, self._output_schema), batch=True)
                 except LLMCallError as error:
-                    results[request_id] = _as_batch(error)
+                    results[request_id] = stamped(error, batch=True)
         return results
 
 
@@ -179,15 +180,6 @@ def _chunks(client: LLMClient[ModelT, ResponseT], bodies: list[tuple[str, dict[s
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
-
-
-def _as_batch(result: LLMResponse | LLMCallError) -> LLMResponse | LLMCallError:
-    # a batch answer is billed at the batch price; the flag keeps it from being costed at the standard one
-    if isinstance(result, LLMResponse):
-        return replace(result, batch=True)
-    if result.response is not None:
-        result.response = replace(result.response, batch=True)
-    return result
 
 
 def _batch_id(job: BatchJob) -> str:

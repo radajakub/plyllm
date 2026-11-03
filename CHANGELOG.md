@@ -6,6 +6,16 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+
+- A per-call sampling seed: `LLM.generate(..., seed=...)`. It is sent where the provider's API takes one: Gemini
+  (`GenerateContentConfig.seed`), Mistral (`random_seed`), and vLLM and Ollama (`seed` in Chat Completions). OpenAI,
+  Grok and Metacentrum (Responses API) and Claude take none: the call runs without it, with a `UserWarning` shown once
+  per provider and model under Python's default warning filter. `LLMResponse.seed` records
+  the seed the request carried, or `None`, also on the response of an `LLMCallError`. The seed is not part of
+  `ModelConfig`, so it changes no config string or path, and batch requests carry none.
+- A client that overrides `LLMClient.generate` (for example a test stub) must accept the new `seed` parameter.
+
 ## [1.4.1] - 2026-10-27
 
 ## [1.4.0] - 2026-10-27

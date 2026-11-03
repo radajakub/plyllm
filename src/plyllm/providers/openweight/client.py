@@ -56,6 +56,11 @@ class OpenWeightLLMClient(OpenWeightClientBase[OpenWeightLLMModel, ChatCompletio
             kwargs["response_format"] = type_to_response_format_param(output_schema)
         return kwargs
 
+    def _apply_seed(self, kwargs: dict[str, Any], seed: int) -> bool:
+        # Chat Completions takes a per-request seed; whether a server's sampler honours it is the server's, not checked here
+        kwargs["seed"] = seed
+        return True
+
     async def _send(self, kwargs: dict[str, Any]) -> ChatCompletion:
         return await self._client.chat.completions.create(**kwargs)
 

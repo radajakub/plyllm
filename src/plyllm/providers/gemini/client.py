@@ -224,6 +224,11 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel, GenerateContentResponse]):
         contents: list[ContentUnion] = [Content(role=_ROLE_MAP[message.role], parts=[Part(text=message.content)]) for message in messages]
         return dict(model=model.model_string, contents=contents, config=params)
 
+    def _apply_seed(self, kwargs: dict[str, Any], seed: int) -> bool:
+        # the seed is a field of the config extract_params built for this call, as system_instruction is; continuation hops keep it
+        kwargs["config"].seed = seed
+        return True
+
     async def _send(self, kwargs: dict[str, Any]) -> GenerateContentResponse:
         # Gemini stops a long answer with finish reason CONTINUATION and a token to resume it from. Since 2.30 the
         # SDK follows those hops itself, then re-reads the joined answer against the schema, which crashes on a

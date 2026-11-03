@@ -130,6 +130,7 @@ class HuggingFaceLLMClient(LLMClient[LLMModel, None]):
         messages: list[LLMMessage],
         options: LLMCallOptions,
         output_schema: type[BaseModel] | None = None,
+        seed: int | None = None,
     ) -> LLMResponse:
         raise NotImplementedError("HuggingFace generate is not supported yet")
 
