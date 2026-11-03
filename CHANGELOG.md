@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-03
+
 ### Added
 
 - A per-call sampling seed: `LLM.generate(..., seed=...)`. It is sent where the provider's API takes one: Gemini
