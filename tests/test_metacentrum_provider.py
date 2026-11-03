@@ -134,7 +134,7 @@ def test_gemma_needs_an_effort_to_reason():
 
 def test_temperature_is_sent_on_metacentrum():
     # it used to be dropped on every model, which only new_api (set on all of them) decided
-    assert _model("qwen-3.5").extract_params(LLMCallOptions(thinking_enabled=True, temperature=0.6))["temperature"] == 0.6
+    assert _model("qwen-3.8-27b").extract_params(LLMCallOptions(thinking_enabled=True, temperature=0.6))["temperature"] == 0.6
 
 
 def test_editing_a_request_body_does_not_change_the_registry_entry():

@@ -67,4 +67,4 @@ def test_only_the_models_e_infra_dropped_are_retired():
         if model.retired
     }
 
-    assert retired == {"deepseek-v4-flash", "deepseek-v3.2-thinking", "qwen-3.5-122b", "glm-5.2", "mistral-small-4"}
+    assert retired == {"qwen-3.5", "deepseek-v4-flash", "deepseek-v3.2-thinking", "qwen-3.5-122b", "glm-5.2", "mistral-small-4"}

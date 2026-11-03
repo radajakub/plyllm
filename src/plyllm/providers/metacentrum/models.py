@@ -86,7 +86,6 @@ def metacentrum_models() -> list[MetacentrumLLMModel]:
         MetacentrumLLMModel("deepseek-v4.1-flash", "deepseek-v4.1-flash", thinking=True, thinking_only=True),
         MetacentrumLLMModel("glm-5.3", "glm-5.3", thinking=True, schema_delivery=SchemaDelivery.PROMPT_AND_ENFORCED),
         MetacentrumLLMModel("kimi-k3", "kimi-k3", thinking=True, supported_reasoning=_KIMI_REASONING, extra_body_no_thinking=_KIMI_NO_THINKING),
-        MetacentrumLLMModel("qwen-3.5", "qwen3.5", thinking=True, extra_body_thinking=_QWEN3_5_THINKING, extra_body_no_thinking=_QWEN_NO_THINKING),
         MetacentrumLLMModel(
             "qwen-3.8-27b",
             "qwen3.8-27b",
@@ -99,6 +98,7 @@ def metacentrum_models() -> list[MetacentrumLLMModel]:
         MetacentrumLLMModel("mistral-medium-3.5", "mistral-medium-3.5"),
         MetacentrumLLMModel("gemma-4", "gemma4", thinking=True, needs_effort_to_think=True, schema_delivery=SchemaDelivery.PROMPT, supported_reasoning=_DEFAULT_REASONING),
         # no longer served by e-INFRA as of 2026-09-24; kept so recorded results still load
+        MetacentrumLLMModel("qwen-3.5", "qwen3.5", thinking=True, extra_body_thinking=_QWEN3_5_THINKING, extra_body_no_thinking=_QWEN_NO_THINKING, retired=True),
         MetacentrumLLMModel("deepseek-v4-flash", "deepseek-v4-flash", thinking=True, retired=True),
         MetacentrumLLMModel("deepseek-v3.2-thinking", "deepseek-v3.2-thinking", thinking=True, retired=True),
         MetacentrumLLMModel("qwen-3.5-122b", "qwen3.5-122b", thinking=True, retired=True, extra_body_thinking=_QWEN3_5_THINKING),
