@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-07
+
 ### Added
 
 - Commands `plyllm-models` (the models of every configured provider, `--served` to ask what each serves now) and
