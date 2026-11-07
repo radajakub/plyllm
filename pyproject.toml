@@ -51,6 +51,10 @@ ollama = ["openai>=3.28.0,<4"]
 huggingface = ["torch>=2.4.0", "transformers>=4.44.0"]
 all = ["openai>=3.28.0,<4", "google-genai>=2.30.0,<3", "anthropic>=1.13.0,<2", "mistralai>=3.2.0,<4", "torch>=2.4.0", "transformers>=4.44.0"]
 
+[project.scripts]
+plyllm-models = "plyllm.cli.models:main"
+plyllm-generate = "plyllm.cli.generate:main"
+
 [project.urls]
 Repository = "https://github.com/radajakub/plyllm"
 Issues = "https://github.com/radajakub/plyllm/issues"

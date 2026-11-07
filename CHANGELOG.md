@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+
+- Commands `plyllm-models` (the models of every configured provider, `--served` to ask what each serves now) and
+  `plyllm-generate` (one call to one model), in `plyllm.cli`. `scripts/models.py` and `scripts/generate.py` still work;
+  `scripts/batch.py` and `scripts/decide.py` stay repo-local feature tests.
+
 ## [1.5.0] - 2026-11-03
 
 ### Added
