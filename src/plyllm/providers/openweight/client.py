@@ -67,6 +67,9 @@ class OpenWeightLLMClient(OpenWeightClientBase[OpenWeightLLMModel, ChatCompletio
     def _tokens_of(self, response: ChatCompletion) -> int:
         return response.usage.total_tokens if response.usage else 0
 
+    def _finish_reason(self, response: ChatCompletion) -> str | None:
+        return response.choices[0].finish_reason if response.choices else None
+
     def _parse(self, model: OpenWeightLLMModel, response: ChatCompletion, output_schema: type[BaseModel] | None) -> LLMResponse:
         message = response.choices[0].message
         output_text, reasoning = _text_and_reasoning(message)

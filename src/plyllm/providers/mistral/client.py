@@ -180,6 +180,9 @@ class MistralLLMClient(LLMClient[MistralLLMModel, ChatCompletionResponse]):
     def _tokens_of(self, response: ChatCompletionResponse) -> int:
         return total_tokens(response)
 
+    def _finish_reason(self, response: ChatCompletionResponse) -> str | None:
+        return str(response.choices[0].finish_reason) if response.choices else None
+
     def _parse(self, model: MistralLLMModel, response: ChatCompletionResponse, output_schema: type[BaseModel] | None) -> LLMResponse:
         choice = response.choices[0] if response.choices else None
         reasoning, output_text = split_content(choice.message if choice is not None else None)

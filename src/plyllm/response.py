@@ -11,6 +11,9 @@ from plyllm.tokens import EmbeddingTokens, LLMTokens
 
 T = TypeVar("T", bound=BaseModel)
 
+# the finish reasons that mean the output limit cut the answer: Claude (also a full context window), Gemini, Chat Completions (OpenAI-compatible, Mistral) and the Responses API
+_LENGTH_REASONS = frozenset({"max_tokens", "model_context_window_exceeded", "MAX_TOKENS", "length", "model_length", "max_output_tokens"})
+
 
 @dataclass(frozen=True)
 class ReasoningTrace:
@@ -41,6 +44,10 @@ class LLMResponse:
     batch: bool = False
     # the sampling seed the request carried; None when none was asked for or the provider's API takes none
     seed: int | None = None
+    # why the provider stopped, as its API names it (e.g. "end_turn", "max_tokens", "STOP", "length"); None when it reports none
+    finish_reason: str | None = None
+    # the transport retries this call took before its answer arrived (0 for a batch request)
+    retries: int = 0
 
     @classmethod
     def from_parts(
@@ -56,6 +63,11 @@ class LLMResponse:
         items: list[LLMResponseItem] = [ReasoningTrace(reasoning)] if reasoning else []
         items.append(OutputText([output_text]))
         return cls(provider, model_string, tokens, items, output_text, output_schema)
+
+    @property
+    def truncated(self) -> bool:
+        # the answer was cut at the output limit, by any provider's name for it
+        return self.finish_reason in _LENGTH_REASONS
 
     @property
     def reasoning(self) -> list[str]:

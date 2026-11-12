@@ -114,6 +114,11 @@ class GrokLLMClient(LLMClient[GrokLLMModel, Response]):
     def _tokens_of(self, response: Response) -> int:
         return responses_total_tokens(response)
 
+    def _finish_reason(self, response: Response) -> str | None:
+        # the Responses API: why an incomplete answer stopped (e.g. max_output_tokens), else the response status
+        details = response.incomplete_details
+        return details.reason if response.status == "incomplete" and details is not None and details.reason is not None else response.status
+
     def _parse(self, model: GrokLLMModel, response: Response, output_schema: type[BaseModel] | None) -> LLMResponse:
         reasoning = _reasoning_summaries(response)
         tokens = responses_tokens(response.usage)

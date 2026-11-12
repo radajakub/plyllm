@@ -34,8 +34,8 @@ CallResult = TypeVar("CallResult", LLMResponse, LLMCallError)
 
 
 def stamped(result: CallResult, **fields: Any) -> CallResult:
-    # sets fields that describe the call rather than the answer (batch, seed), after parsing: on the response, or on the
-    # response a failed call carries. LLMResponse is frozen, so it is copied; the error is updated in place
+    # sets fields that describe the call rather than the answer (batch, seed, finish reason, retries), after parsing: on the response, or on
+    # the response a failed call carries. LLMResponse is frozen, so it is copied; the error is updated in place
     if isinstance(result, LLMResponse):
         return replace(result, **fields)
     if result.response is not None:
@@ -181,9 +181,10 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
         task: Callable[[], Awaitable[T]],
         retry_errors: tuple[type[Exception], ...],
         tokens_of: Callable[[T], int] | None = None,
+        on_retry: Callable[[], None] | None = None,
     ) -> T:
         estimate = self._token_estimate(model, system, messages, options)
-        return await self._paced(self.gate(model), estimate, task, retry_errors, tokens_of)
+        return await self._paced(self.gate(model), estimate, task, retry_errors, tokens_of, on_retry)
 
     async def _paced(
         self,
@@ -192,11 +193,14 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
         task: Callable[[], Awaitable[T]],
         retry_errors: tuple[type[Exception], ...],
         tokens_of: Callable[[T], int] | None = None,
+        on_retry: Callable[[], None] | None = None,
     ) -> T:
         try:
             # generation, embeddings and decisions share one retry rule per provider: `_should_retry_on_error`
             return await self._semaphore.run(
-                lambda: safe_call(lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=self._should_retry_on_error, retries=self._retries)
+                lambda: safe_call(
+                    lambda: gate.run(task, estimate, tokens_of), retry_errors=retry_errors, retry_if=self._should_retry_on_error, retries=self._retries, on_retry=on_retry
+                )
             )
         except Exception as error:
             # classified here, where the SDK's own types are in scope. Callers get a kind without
@@ -278,13 +282,20 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
             # the message carries no seed value, so Python's default filter shows it once per provider and model, not on every call
             warnings.warn(f"{self.provider_key.value} takes no sampling seed, so {model.model_name} is called without one (response.seed is None)", stacklevel=2)
 
-        response = await self._dispatch(model, system, messages, options, lambda: self._send(kwargs), self._retry_errors, tokens_of=self._tokens_of)
+        retries = 0
 
+        def retried() -> None:
+            nonlocal retries
+            retries += 1
+
+        response = await self._dispatch(model, system, messages, options, lambda: self._send(kwargs), self._retry_errors, tokens_of=self._tokens_of, on_retry=retried)
+
+        call = {"seed": applied, "finish_reason": self._finish_reason(response), "retries": retries}
         try:
-            return stamped(self._parse(model, response, output_schema), seed=applied)
+            return stamped(self._parse(model, response, output_schema), **call)
         except LLMCallError as error:
-            # an answer that arrived and failed (unparseable, refused) records the seed as well
-            stamped(error, seed=applied)
+            # an answer that arrived and failed (unparseable, refused) records them as well
+            stamped(error, **call)
             raise
 
     def _apply_seed(self, kwargs: dict[str, Any], seed: int) -> bool:
@@ -310,6 +321,10 @@ class LLMClient(ABC, Generic[ModelT, ResponseT]):
     def _parse(self, model: ModelT, response: ResponseT, output_schema: type[BaseModel] | None) -> LLMResponse:
         # the SDK's response object into an LLMResponse; raises LLMCallError for a refusal or an answer off the schema
         raise NotImplementedError
+
+    def _finish_reason(self, response: ResponseT) -> str | None:
+        # why the provider stopped, as its API names it; a provider that reports none keeps this default
+        return None
 
     async def _batch_api(self, task: Callable[[], Awaitable[T]]) -> T:
         # status checks, downloads and cancels can be repeated safely, so they get the usual retries. They bypass

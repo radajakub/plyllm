@@ -127,6 +127,9 @@ class ClaudeLLMClient(LLMClient[ClaudeLLMModel, Message]):
     def _tokens_of(self, response: Message) -> int:
         return _total_tokens(response)
 
+    def _finish_reason(self, response: Message) -> str | None:
+        return response.stop_reason
+
     def _parse(self, model: ClaudeLLMModel, response: Message, output_schema: type[BaseModel] | None) -> LLMResponse:
         output_text = _output_text(response)
         tokens = message_tokens(response.usage)

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -135,7 +136,8 @@ def test_a_collected_answer_reads_the_same_as_generate(llm: LLM, server: _FakeGe
 
     collected = outcome.results["q1"]
     assert isinstance(collected, LLMResponse)
-    assert collected == LLMResponse(direct.provider, direct.model_string, direct.tokens, direct.items, direct.output_text, direct.structured_output_type, batch=True)
+    # the same answer, finish reason included; only the batch flag differs
+    assert collected == replace(direct, batch=True)
     assert store.load() == []
 
 

@@ -121,6 +121,11 @@ class MetacentrumLLMClient(OpenWeightClientBase[MetacentrumLLMModel, Response]):
     def _tokens_of(self, response: Response) -> int:
         return responses_total_tokens(response)
 
+    def _finish_reason(self, response: Response) -> str | None:
+        # the Responses API: why an incomplete answer stopped (e.g. max_output_tokens), else the response status
+        details = response.incomplete_details
+        return details.reason if response.status == "incomplete" and details is not None and details.reason is not None else response.status
+
     def _parse(self, model: MetacentrumLLMModel, response: Response, output_schema: type[BaseModel] | None) -> LLMResponse:
         # every path strips the inline <think> block a hosted model may emit before the answer is read as JSON
         output_text, reasoning = _extract_text_and_reasoning(response)

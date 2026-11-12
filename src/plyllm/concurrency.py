@@ -41,15 +41,18 @@ async def safe_call(
     delay_base: float = 2.0,
     delay_max: float = 30.0,
     retry_if: Callable[[Exception], bool] | None = None,
+    on_retry: Callable[[], None] | None = None,
 ) -> T:
     # retry_if narrows retry_errors for SDKs that funnel every HTTP failure into one exception type,
-    # where only some statuses (throttling, 5xx) are worth another attempt
+    # where only some statuses (throttling, 5xx) are worth another attempt; on_retry is told of each retry
     for attempt in range(retries):
         try:
             return await task()
         except retry_errors as error:
             if attempt == retries - 1 or (retry_if is not None and not retry_if(error)):
                 raise
+            if on_retry is not None:
+                on_retry()
             delay = min(delay_base * (2**attempt), delay_max) * random.uniform(0.7, 1.2)
             await asyncio.sleep(delay)
     raise RuntimeError("unreachable: safe_call exhausted retries without returning or raising")

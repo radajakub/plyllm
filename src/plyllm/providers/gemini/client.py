@@ -243,6 +243,11 @@ class GeminiLLMClient(LLMClient[GeminiLLMModel, GenerateContentResponse]):
     def _tokens_of(self, response: GenerateContentResponse) -> int:
         return _total_tokens(response)
 
+    def _finish_reason(self, response: GenerateContentResponse) -> str | None:
+        # of the last continuation hop, which _joined keeps
+        finish = response.candidates[0].finish_reason if response.candidates else None
+        return finish.value if finish is not None else None
+
     def _parse(self, model: GeminiLLMModel, response: GenerateContentResponse, output_schema: type[BaseModel] | None) -> LLMResponse:
         usage = response.usage_metadata
         reasoning_tokens = (usage.thoughts_token_count or 0) if usage is not None else 0

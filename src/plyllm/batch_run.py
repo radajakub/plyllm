@@ -144,10 +144,11 @@ class BatchRun(Generic[ModelT, ResponseT]):
                 results[request_id] = item
             else:
                 # a batch answer is billed at the batch price; the flag keeps it from being costed at the standard one
+                finish_reason = self._client._finish_reason(item)
                 try:
-                    results[request_id] = stamped(self._client._parse(self._model, item, self._output_schema), batch=True)
+                    results[request_id] = stamped(self._client._parse(self._model, item, self._output_schema), batch=True, finish_reason=finish_reason)
                 except LLMCallError as error:
-                    results[request_id] = stamped(error, batch=True)
+                    results[request_id] = stamped(error, batch=True, finish_reason=finish_reason)
         return results
 
 

@@ -6,6 +6,19 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+
+- `LLMResponse.finish_reason`: why the provider stopped, as its API names it, also on the response of an
+  `LLMCallError` and of a batch request. Responses API (OpenAI, Grok, Metacentrum): `incomplete_details.reason` of an
+  incomplete answer (e.g. `max_output_tokens`), else the response `status`; Claude: `stop_reason`; Gemini:
+  `finish_reason` of the last continuation hop (e.g. `STOP`, `MAX_TOKENS`); Mistral, vLLM and Ollama (Chat
+  Completions): `finish_reason`. `None` for a provider that reports none.
+- `LLMResponse.truncated`: the answer was cut at the output limit, whatever the provider calls it.
+- `LLMResponse.retries`: the transport retries the call took before its answer arrived (0 for a batch request).
+  `safe_call` takes an optional `on_retry` callback.
+- A test stub that replaces `LLMClient._send` with an object that is not the provider's SDK response must also replace
+  `_finish_reason`.
+
 ## [1.6.0] - 2026-11-07
 
 ### Added

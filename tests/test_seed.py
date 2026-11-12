@@ -95,6 +95,7 @@ def _captured(client: LLMClient, monkeypatch: pytest.MonkeyPatch, parse_error: b
 
     monkeypatch.setattr(client, "_send", send)
     monkeypatch.setattr(client, "_tokens_of", lambda response: 0)
+    monkeypatch.setattr(client, "_finish_reason", lambda response: None)
     monkeypatch.setattr(client, "_parse", parse)
     return sent
 
