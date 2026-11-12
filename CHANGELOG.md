@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-12
+
 ### Added
 
 - `LLMResponse.finish_reason`: why the provider stopped, as its API names it, also on the response of an
